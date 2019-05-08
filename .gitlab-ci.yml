@@ -1,0 +1,84 @@
+########
+#!! Use spaces, no tabs for nesting !!
+#https://docs.gitlab.com/ee/ci/yaml/
+#
+#v 0.1
+#- dummy pipeline
+#-general structure, no jobs are executed, no scripts/commands inserted
+#-todo define jobs
+#-todo define gitstrategy
+#-todo evaluate whether artefacts are needed 
+########
+environment:
+ name: production
+ url: https://gitlab.lrz.de/random_state42/xray
+
+#include files (remote /local etc)
+#include:
+ # - remote: 'https://gitlab.com/awesome-project/raw/master/.before-script-template.yml'
+ # - local: '/templates/.after-script-template.yml'
+ # - template: Auto-DevOps.gitlab-ci.yml
+
+stages:
+ - build
+ - cleanup_build
+ - test
+ - deploy
+	- cleanup
+
+before_script:
+
+
+job1:
+ ##include banches
+ #only:
+  #- branches@https://gitlab.lrz.de/random_state42/xray
+ ##exclude branches
+ #except:
+  #- master@gitlab.lrz.de/random_state42/xray
+ stage: build
+ script: echo 'build'
+  #-make build
+ allow_failure: false
+ #
+ #artifacts is used to specify a list of files and directories which should be attached to the job after success.
+ #The artifacts will be sent to GitLab after the job finishes successfully and will be available for download in the GitLab UI.
+ #To create an archive with a name of the current job and the current branch or tag including only the binaries 
+ #artifacts:
+  #If you use Windows Batch to run your shell scripts you need to replace $ with %
+  #If you use Windows PowerShell to run your shell scripts you need to replace $ with $env:
+  #name: "$CI_JOB_STAGE-$CI_COMMIT_REF_NAME"	
+  #paths:
+   #- binaries/
+   #- .config	
+
+job2:
+ stage: test
+ script: echo 'test1'
+ allow_failure: false
+
+job3:
+ stage: test
+ script: echo 'test2'
+ #dependencies:job22
+
+job4:
+ stage: deploy
+ script: echo 'deploy'
+ #-git push production HEAD:master
+ when: on_success
+ #when: manual
+
+cleanup_build_job:
+ stage: cleanup_build
+ script:
+  #- cleanup build when failed
+ when: on_failure
+
+cleanup_job:
+ stage: cleanup
+ script:
+  #- cleanup after jobs
+ when: always
+
+after_script:
