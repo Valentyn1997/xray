@@ -24,7 +24,7 @@ stages:
  - cleanup_build
  - test
  - deploy
-	- cleanup
+ - cleanup
 
 before_script:
 
