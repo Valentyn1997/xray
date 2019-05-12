@@ -27,7 +27,7 @@ stages:
  - cleanup
 
 before_script:
-
+ - python -V
 
 job1:
  ##include banches
