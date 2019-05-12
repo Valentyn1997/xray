@@ -1,84 +1,40 @@
-########
-#!! Use spaces, no tabs for nesting !!
-#https://docs.gitlab.com/ee/ci/yaml/
+# This file is a template, and might need editing before it works on your project.
+# Official language image. Look for the different tagged releases at:
+# https://hub.docker.com/r/library/python/tags/
+image: python:latest
+
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Pip's cache doesn't store the python packages
+# https://pip.pypa.io/en/stable/reference/pip_install/#caching
 #
-#v 0.1
-#- dummy pipeline
-#-general structure, no jobs are executed, no scripts/commands inserted
-#-todo define jobs
-#-todo define gitstrategy
-#-todo evaluate whether artefacts are needed 
-########
-environment:
- name: production
- url: https://gitlab.lrz.de/random_state42/xray
-
-#include files (remote /local etc)
-#include:
- # - remote: 'https://gitlab.com/awesome-project/raw/master/.before-script-template.yml'
- # - local: '/templates/.after-script-template.yml'
- # - template: Auto-DevOps.gitlab-ci.yml
-
-stages:
- - build
- - cleanup_build
- - test
- - deploy
- - cleanup
+# If you want to also cache the installed packages, you have to install
+# them in a virtualenv and cache it as well.
+cache:
+  paths:
+    - .cache/pip
+    - venv/
 
 before_script:
- - python -V
+  - python3 -V               # Print out python version for debugging
+  - python3 -m venv venv/
+  - source ./venv/bin/activate
+  - pip3 install -r requirements.txt
 
-job1:
- ##include banches
- #only:
-  #- branches@https://gitlab.lrz.de/random_state42/xray
- ##exclude branches
- #except:
-  #- master@gitlab.lrz.de/random_state42/xray
- stage: build
- script: echo 'build'
-  #-make build
- allow_failure: false
- #
- #artifacts is used to specify a list of files and directories which should be attached to the job after success.
- #The artifacts will be sent to GitLab after the job finishes successfully and will be available for download in the GitLab UI.
- #To create an archive with a name of the current job and the current branch or tag including only the binaries 
- #artifacts:
-  #If you use Windows Batch to run your shell scripts you need to replace $ with %
-  #If you use Windows PowerShell to run your shell scripts you need to replace $ with $env:
-  #name: "$CI_JOB_STAGE-$CI_COMMIT_REF_NAME"	
-  #paths:
-   #- binaries/
-   #- .config	
+stages:
+  - build
+  - test
+  - deploy`
 
-job2:
- stage: test
- script: echo 'test1'
- allow_failure: false
+linting_job:
+  stage: build
+  script: flake8 --exclude=venv*,docs --statistics
+  
 
-job3:
- stage: test
- script: echo 'test2'
- #dependencies:job22
-
-job4:
- stage: deploy
- script: echo 'deploy'
- #-git push production HEAD:master
- when: on_success
- #when: manual
-
-cleanup_build_job:
- stage: cleanup_build
- script:
-  #- cleanup build when failed
- when: on_failure
-
-cleanup_job:
- stage: cleanup
- script:
-  #- cleanup after jobs
- when: always
-
-after_script:
+example_job:
+  stage: test
+  script:
+  - echo Hello from Gitlab runner!
