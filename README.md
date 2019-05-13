@@ -2,6 +2,7 @@ xray
 ==============================
 
 [![pipeline status](https://gitlab.lrz.de/random_state42/xray/badges/master/pipeline.svg)](https://gitlab.lrz.de/random_state42/xray/commits/master)
+[![coverage report](https://gitlab.lrz.de/random_state42/xray/badges/master/coverage.svg)](https://gitlab.lrz.de/random_state42/xray/commits/master)
 
 Anomaly Detection in X-Ray Images as an Unsupervised learning task
 
