@@ -1,12 +1,11 @@
-from setuptools import find_packages, setup
-from distutils.core import setup
+from setuptools import setup
 
 
 setup(
     name='src',
     packages=find_packages(),
     version='0.1.0',
-    description='Anomaly Detection in X-Ray Images as an Unsupervised learning task',
+    description='Anomaly Detection in X-Ray Images Unsupervised learning task',
     author='random_state42',
     license='',
 )
