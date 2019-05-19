@@ -1,7 +1,8 @@
 # Python 2/3 compatibility
 import numpy as np
 import cv2 as cv
-import imutils, time
+import imutils
+import time
 import os
 import sys
 PY3 = sys.version_info[0] == 3
@@ -14,9 +15,10 @@ max_skew = 0.45
 image_format = "png"
 out_path = "out"+str(time.time())
 
+
 def angle_cos(p0, p1, p2):
     d1, d2 = (p0-p1).astype('float'), (p2-p1).astype('float')
-    return abs( np.dot(d1, d2) / np.sqrt( np.dot(d1, d1)*np.dot(d2, d2) ) )
+    return abs(np.dot(d1, d2) / np.sqrt( np.dot(d1, d1)*np.dot(d2, d2)))
 
 
 def find_squares(img):
@@ -35,9 +37,12 @@ def find_squares(img):
             for cnt in contours:
                 cnt_len = cv.arcLength(cnt, True)
                 cnt = cv.approxPolyDP(cnt, 0.02*cnt_len, True)
-                if len(cnt) >= 4 and cv.contourArea(cnt) > min_area and cv.isContourConvex(cnt):
+                if len(cnt) >= 4 and cv.contourArea(cnt) > min_area \
+                        and cv.isContourConvex(cnt):
                     cnt = cnt.reshape(-1, 2)
-                    max_cos = np.max([angle_cos(cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4]) for i in xrange(4)])
+                    max_cos = np.max([angle_cos(cnt[i], cnt[(i+1) % 4],
+                                      cnt[(i+2) % 4])
+                                      for i in xrange(4)])
                     if max_cos < max_skew:
                         squares.append(cnt)
     return squares
@@ -65,7 +70,8 @@ def main():
             height = int(rect[1][1])
 
             src_pts = box.astype("float32")
-            # coordinate of the points in box points after the rectangle has been straightened
+            # coordinate of the points in box points after the rectangle has
+            # been straightened
             dst_pts = np.array([[0, height - 1],
                                 [0, 0],
                                 [width - 1, 0],
@@ -74,12 +80,14 @@ def main():
             # the perspective transformation matrix
             M = cv.getPerspectiveTransform(src_pts, dst_pts)
 
-            # directly warp the rotated rectangle to get the straightened rectangle
+            # directly warp the rotated rectangle to get the straightened
+            # rectangle
             warped = cv.warpPerspective(img, M, (width, height))
 
             # show image
             # cv.imshow("crop_img.jpg", warped)
-            cv.imwrite(out_path+"/img"+str(time.time())+"."+image_format, warped)
+            cv.imwrite(out_path+"/img"+str(time.time())+"."+image_format,
+                       warped)
             # cv.waitKey(0)
 
     print('Done')
