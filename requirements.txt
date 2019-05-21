@@ -1,5 +1,13 @@
+tqdm
+torchsummary
+matplotlib
+scikit-learn
+pandas
+opencv-python
+numpy
+torch
 # local package
--e .
+# -e .
 
 # external requirements
 click
