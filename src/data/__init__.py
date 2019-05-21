@@ -44,9 +44,9 @@ class TrainValTestSplitter:
         self._split_stats(self.data_train)
 
         # validate | test split
-        data_val_test = pd.concat([self.data[self.data.label == 1],
-                                   self.data.iloc[negative_data. \
-                                  iloc[idx_validate_test, :].index]])
+        data_val_test = pd.concat(
+            [self.data[self.data.label == 1],
+             self.data.iloc[negative_data.iloc[idx_validate_test, :].index]])
         splitter = GroupShuffleSplit(n_splits=1, test_size=0.50,
                                      random_state=42)
         generator = splitter.split(data_val_test.label,
@@ -55,7 +55,7 @@ class TrainValTestSplitter:
 
         print('=============Validation subset===============')
         self.data_val = data_val_test.iloc[idx_val, :]
-        self.data_val = self.data_val.sample(len(self.data_val))\
+        self.data_val = self.data_val.sample(len(self.data_val)) \
             .reset_index(drop=True)
         self._split_stats(self.data_val)
 
@@ -108,7 +108,7 @@ class DataGenerator:
     def on_epoch_end(self):
         """Updates indexes after each epoch"""
         self.indexes = np.arange(len(self.filenames))
-        if self.shuffle == True:
+        if self.shuffle:
             np.random.shuffle(self.indexes)
 
     def __data_generation(self, list_filenames_temp) -> np.array:

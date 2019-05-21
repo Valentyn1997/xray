@@ -6,7 +6,7 @@ from tqdm import tqdm
 from torchsummary import summary
 
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve
+from sklearn.metrics import roc_auc_score, precision_recall_curve
 
 from src.data import DataGenerator, TrainValTestSplitter
 from src.models import BaselineAutoencoder
@@ -34,7 +34,7 @@ outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 print(summary(model,
               input_size=(train_generator.n_channels, *train_generator.dim)))
-mkdir_p('tmp') #For saving intermediate pictures
+mkdir_p('tmp')  # For saving intermediate pictures
 
 # Training
 num_epochs = 2
@@ -77,7 +77,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         losses = []
         for batch in tqdm(range(len(val_generator)), desc='Validation'):
-            inp = Variable(torch.from_numpy(val_generator[batch]).float()).\
+            inp = Variable(torch.from_numpy(val_generator[batch]).float()). \
                 cpu()
 
             # forward pass

@@ -6,7 +6,8 @@ def mkdir_p(mypath):
 
     try:
         makedirs(mypath)
-    except OSError as exc: # Python >2.5
+    except OSError as exc:  # Python >2.5
         if exc.errno == EEXIST and path.isdir(mypath):
             pass
-        else: raise
+        else:
+            raise
