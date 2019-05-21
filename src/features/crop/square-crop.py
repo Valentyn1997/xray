@@ -87,9 +87,10 @@ def main():
                     # show image
                     # cv.imshow("crop_img.jpg", warped)
 
-                    write_dir = out_path + "/" \
-                                + basename(dirname(dirname(fn))) \
-                                + "/" + basename(dirname(fn))
+                    write_dir = \
+                        out_path + "/" + \
+                        basename(dirname(dirname(fn))) + "/" + \
+                        basename(dirname(fn))
                     try:
                         os.makedirs(write_dir)
                     except Exception as e:
