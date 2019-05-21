@@ -6,7 +6,7 @@ from tqdm import tqdm
 from torchsummary import summary
 
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve, f1_score
+from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve
 
 from src.data import DataGenerator, TrainValTestSplitter
 from src.models import BaselineAutoencoder
@@ -32,14 +32,15 @@ model = BaselineAutoencoder().cpu()
 inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-print(summary(model, input_size=(train_generator.n_channels, *train_generator.dim)))
+print(summary(model,
+              input_size=(train_generator.n_channels, *train_generator.dim)))
 mkdir_p('tmp') #For saving intermediate pictures
 
 # Training
 num_epochs = 2
 for epoch in range(num_epochs):
 
-    print('==================Epoch [{}/{}]==================='.format(epoch + 1, num_epochs))
+    print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
 
     for batch in tqdm(range(len(train_generator)), desc='Training'):
         inp = Variable(torch.from_numpy(train_generator[batch]).float()).cpu()
@@ -54,7 +55,8 @@ for epoch in range(num_epochs):
         optimizer.step()
 
     # log
-    print('Loss on last train batch:{:.4f}'.format(epoch + 1, num_epochs, loss.data))
+    print('Loss on last train batch:{:.4f}'.format(epoch + 1,
+                                                   num_epochs, loss.data))
 
     # shuffle
     train_generator.on_epoch_end()
@@ -75,7 +77,8 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         losses = []
         for batch in tqdm(range(len(val_generator)), desc='Validation'):
-            inp = Variable(torch.from_numpy(val_generator[batch]).float()).cpu()
+            inp = Variable(torch.from_numpy(val_generator[batch]).float()).\
+                cpu()
 
             # forward pass
             output = model(inp)
@@ -84,15 +87,17 @@ for epoch in range(num_epochs):
         true_labels = val_generator.get_true_labels()
 
         # ROC-AUC
-        print(f'ROC-AUC on val: {roc_auc_score(y_true=true_labels, y_score=losses)}')
+        print(f'ROC-AUC on val: {roc_auc_score(true_labels, losses)}')
 
         # MSE
         print(f'MSE on val: {losses.mean()}')
 
         # F1-score
-        precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
+        precision, recall, thresholds = \
+            precision_recall_curve(y_true=true_labels, probas_pred=losses)
         f1_scores = (2 * precision * recall / (precision + recall))
         opt_treshold = thresholds[np.argmax(f1_scores)]
-        print(f'F1-score: {np.max(f1_scores)}. Optimal treshold: {opt_treshold}')
+        print(f'F1-score: {np.max(f1_scores)}. '
+              f'Optimal threshold: {opt_treshold}')
 
 torch.save(model, '..\\..\\models\\baseline_autoencoder.pt')
