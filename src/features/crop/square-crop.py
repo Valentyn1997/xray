@@ -12,11 +12,10 @@ PY3 = sys.version_info[0] == 3
 if PY3:
     xrange = range
 
-min_area = 15000
-max_skew = 0.45
+out_path = "../../../../xray/data/train/XR_HAND_CROPPED3"
+data_dir = "../../../../xray/data/train/XR_HAND_test"
+# Image format to write ouput
 image_format = "png"
-out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
-data_dir = "../../../../xray/data/train/XR_HAND"
 
 
 def angle_cos(p0, p1, p2):
@@ -24,7 +23,14 @@ def angle_cos(p0, p1, p2):
     return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1) * np.dot(d2, d2)))
 
 
-def find_squares(img):
+def find_squares(img, min_area=15000, max_skew=0.45):
+    """
+    A method to find inner square images on bigger images
+    :param min_area: specifies minimal square area in pixels
+    :param max_skew: specifies maximum skewness of squares
+    :param img: numpy array representation of an image
+    :return: list of found squares
+    """
     img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     img = cv.GaussianBlur(img, (5, 5), 0)
     squares = []
@@ -52,10 +58,15 @@ def find_squares(img):
 
 
 def main():
+    """
+    Runs script to find and crop squares from the data folder with predefined
+    folder structure /patient_folder/inner_folder/xxx.png
+    """
     for dir in glob(data_dir + "/*"):
         for dir2 in glob(dir + "/*"):
             for fn in glob(dir2 + "/*." + image_format):
                 img = cv.imread(fn)
+                print(type(img))
                 squares = find_squares(img)
                 # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
 
