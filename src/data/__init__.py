@@ -11,6 +11,11 @@ class TrainValTestSplitter:
 
     def __init__(self, path_to_data='..\\..\\data\\train\\XR_HAND\\*\\*\\*',
                  show_labels_dist=False):
+        """
+        Train-validation-test splitter, stores all the filenames
+        :param path_to_data: for glob.glob to find all the images path
+        :param show_labels_dist: show plot of distributions of labels
+        """
         self.data = pd.DataFrame()
         self.data['path'] = glob.glob(path_to_data)
         self.data['label'] = self.data['path']. \
@@ -30,6 +35,9 @@ class TrainValTestSplitter:
         print(f'Number of patients: {len(df.patient.unique())}')
 
     def _split_data(self):
+        """
+        Creates data_train, data_val, data_test dataframes with filenames
+        """
         # train | validate test split
         splitter = GroupShuffleSplit(n_splits=1,
                                      test_size=0.05, random_state=42)
@@ -71,7 +79,15 @@ class DataGenerator:
 
     def __init__(self, filenames, batch_size=16, dim=(512, 512), n_channels=1,
                  shuffle=True, true_labels=None):
-        """Initialization"""
+        """Initialization
+        :param filenames: list of filenames, e.g. from TrainValTestSplitter
+        :param batch_size: size of batch
+        :param dim: size of images in batch, all the images will be resized to
+        fit
+        :param n_channels: 1 - for black/white
+        :param shuffle: shuffle all the data after epoch end
+        :param true_labels: list of true labels (for validation and split)
+        """
         self.dim = dim
         self.batch_size = batch_size
         self.filenames = filenames
