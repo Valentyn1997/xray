@@ -5,6 +5,8 @@ import imutils
 import time
 import os
 import sys
+from glob import glob
+from os.path import basename, dirname
 
 PY3 = sys.version_info[0] == 3
 
@@ -14,7 +16,8 @@ if PY3:
 min_area = 15000
 max_skew = 0.45
 image_format = "png"
-out_path = "out" + str(time.time())
+out_path = "./out" + str(time.time())
+data_dir = "C:/Users/Di/Desktop/LMU_study/BDS_praktikum/xray/data/train/XR_HAND_test"
 
 
 def angle_cos(p0, p1, p2):
@@ -50,53 +53,60 @@ def find_squares(img):
 
 
 def main():
-    from glob import glob
-    for fn in glob("./*." + image_format):
-        img = cv.imread(fn)
-        squares = find_squares(img)
-        # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
+    for dir in glob(data_dir + "/*"):
+        for dir2 in glob(dir + "/*"):
+            for fn in glob(dir2 + "/*." + image_format):
+                img = cv.imread(fn)
+                squares = find_squares(img)
+                # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
 
-        # show image
-        # cv.imshow('squares', img)
+                # show image
+                # cv.imshow('squares', img)
 
-        if squares:
-            rect = cv.minAreaRect(squares[0])
+                if squares:
+                    rect = cv.minAreaRect(squares[0])
 
-            box = cv.boxPoints(rect)
-            box = np.int0(box)
+                    box = cv.boxPoints(rect)
+                    box = np.int0(box)
 
-            # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
+                    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
 
-            width = int(rect[1][0])
-            height = int(rect[1][1])
+                    width = int(rect[1][0])
+                    height = int(rect[1][1])
 
-            src_pts = box.astype("float32")
-            # coordinate of the points in box points after the rectangle has
-            # been straightened
-            dst_pts = np.array([[0, height - 1],
-                                [0, 0],
-                                [width - 1, 0],
-                                [width - 1, height - 1]], dtype="float32")
+                    src_pts = box.astype("float32")
+                    # coordinate of the points in box points after the rectangle has
+                    # been straightened
+                    dst_pts = np.array([[0, height - 1],
+                                        [0, 0],
+                                        [width - 1, 0],
+                                        [width - 1, height - 1]],
+                                       dtype="float32")
 
-            # the perspective transformation matrix
-            M = cv.getPerspectiveTransform(src_pts, dst_pts)
+                    # the perspective transformation matrix
+                    M = cv.getPerspectiveTransform(src_pts, dst_pts)
 
-            # directly warp the rotated rectangle to get the straightened
-            # rectangle
-            warped = cv.warpPerspective(img, M, (width, height))
+                    # directly warp the rotated rectangle to get the straightened
+                    # rectangle
+                    warped = cv.warpPerspective(img, M, (width, height))
 
-            # show image
-            # cv.imshow("crop_img.jpg", warped)
-            cv.imwrite(
-                out_path + "/img" + str(time.time()) + "." + image_format,
-                warped)
-            # cv.waitKey(0)
+                    # show image
+                    # cv.imshow("crop_img.jpg", warped)
+
+                    write_dir = out_path + "/" \
+                                + basename(dirname(dirname(fn))) \
+                                + "/" + basename(dirname(fn))
+                    try:
+                        os.makedirs(write_dir)
+                    except Exception as e:
+                        print(e)
+                    cv.imwrite(write_dir + "/" + basename(fn), warped)
+                    # cv.waitKey(0)
 
     print('Done')
 
 
 if __name__ == '__main__':
     print(__doc__)
-    os.mkdir(out_path)
     main()
     cv.destroyAllWindows()
