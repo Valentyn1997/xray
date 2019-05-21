@@ -93,8 +93,8 @@ def main():
                         basename(dirname(fn))
                     try:
                         os.makedirs(write_dir)
-                    except Exception as e:
-                        print(e)
+                    except OSError:
+                        pass
                     cv.imwrite(write_dir + "/" + basename(fn), warped)
                     # cv.waitKey(0)
 
