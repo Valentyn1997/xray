@@ -37,7 +37,7 @@ print(summary(model,
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Training
-num_epochs = 2
+num_epochs = 20
 for epoch in range(num_epochs):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
