@@ -14,12 +14,13 @@ from src.models import BaselineAutoencoder
 from src import mkdir_p
 
 np.seterr(divide='ignore', invalid='ignore')
+torch.manual_seed(42)
 
 splitter = TrainValTestSplitter()
-train_generator = DataGenerator(filenames=splitter.data_train.path[0:128],
+train_generator = DataGenerator(filenames=splitter.data_train.path,
                                 batch_size=32,
                                 dim=(64, 64))
-val_generator = DataGenerator(filenames=splitter.data_val.path[0:64],
+val_generator = DataGenerator(filenames=splitter.data_val.path,
                               batch_size=32,
                               dim=(64, 64),
                               true_labels=splitter.data_val.label)
@@ -37,7 +38,7 @@ print(summary(model,
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Training
-num_epochs = 20
+num_epochs = 100
 for epoch in range(num_epochs):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
@@ -55,8 +56,7 @@ for epoch in range(num_epochs):
         optimizer.step()
 
     # log
-    print('Loss on last train batch:{:.4f}'.format(epoch + 1,
-                                                   num_epochs, loss.data))
+    print('Loss on last train batch:{:.4f}'.format(loss.data))
 
     # shuffle
     train_generator.on_epoch_end()
@@ -69,9 +69,10 @@ for epoch in range(num_epochs):
         output_img = output.numpy()[0][0]
 
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-        ax[0].imshow(inp_image[0][0])
-        ax[1].imshow(output_img)
+        ax[0].imshow(inp_image[0][0], cmap='gray', vmin=0, vmax=1)
+        ax[1].imshow(output_img, cmap='gray', vmin=0, vmax=1)
         plt.savefig(f'tmp\\epoch{epoch}.png')
+        plt.close(fig)
 
     # validation
     with torch.no_grad():

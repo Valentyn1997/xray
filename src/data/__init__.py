@@ -40,7 +40,7 @@ class TrainValTestSplitter:
         """
         # train | validate test split
         splitter = GroupShuffleSplit(n_splits=1,
-                                     test_size=0.05, random_state=42)
+                                     test_size=0.3, random_state=42)
         negative_data = self.data[self.data.label == 0]
         generator = splitter.split(negative_data.label,
                                    groups=negative_data['patient'])
@@ -78,7 +78,7 @@ class DataGenerator:
     """Generates data"""
 
     def __init__(self, filenames, batch_size=16, dim=(512, 512), n_channels=1,
-                 shuffle=True, true_labels=None):
+                 shuffle=True, true_labels=None, random_state=42):
         """Initialization
         :param filenames: list of filenames, e.g. from TrainValTestSplitter
         :param batch_size: size of batch
@@ -93,6 +93,8 @@ class DataGenerator:
         self.filenames = filenames
         self.n_channels = n_channels
         self.shuffle = shuffle
+        if random_state is not None:
+            np.random.seed(random_state)
         self.on_epoch_end()
         self.input_shape = (self.batch_size, self.n_channels, *self.dim)
         self.true_labels = np.array(true_labels)
@@ -138,9 +140,11 @@ class DataGenerator:
             # Store sample
             img = cv2.imread(filename)
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            tb, uneven_tb = int((512 - img.shape[0])/2), (512 - img.shape[0])%2
+            lr, uneven_lr = int((512 - img.shape[1])/2), (512 - img.shape[1])%2
             img = cv2.copyMakeBorder(img,
-                                     0, 512 - img.shape[0],
-                                     0, 512 - img.shape[1],
+                                     tb, tb+uneven_tb,
+                                     lr, lr+uneven_lr,
                                      cv2.BORDER_CONSTANT, value=0)
             img = cv2.resize(img, self.dim)
             img = img * 1 / 255
