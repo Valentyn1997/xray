@@ -32,7 +32,7 @@ inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 print(summary(model, input_size=(train_generator.n_channels,
-                                 *train_generator.dim)))
+                                 *train_generator.dim), device='cpu'))
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Training
