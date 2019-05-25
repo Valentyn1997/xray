@@ -144,11 +144,12 @@ class DataGenerator:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
             # Centering & padding with black color (for the same dimension)
-            tb, uneven_tb = int((512 - img.shape[0])/2), \
-                            (512 - img.shape[0]) % 2
-            lr, uneven_lr = int((512 - img.shape[1])/2), \
-                            (512 - img.shape[1]) % 2
-            img = cv2.copyMakeBorder(img, tb, tb+uneven_tb, lr, lr+uneven_lr,
+            tb, uneven_tb = int((512 - img.shape[0]) / 2), \
+                               (512 - img.shape[0]) % 2
+            lr, uneven_lr = int((512 - img.shape[1]) / 2), \
+                               (512 - img.shape[1]) % 2
+            img = cv2.copyMakeBorder(img, tb, tb + uneven_tb, lr,
+                                     lr + uneven_lr,
                                      cv2.BORDER_CONSTANT, value=0)
 
             # Resizing
