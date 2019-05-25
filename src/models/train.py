@@ -17,24 +17,19 @@ np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
 splitter = TrainValTestSplitter()
-train_generator = DataGenerator(filenames=splitter.data_train.path,
-                                batch_size=32,
-                                dim=(64, 64))
-val_generator = DataGenerator(filenames=splitter.data_val.path,
-                              batch_size=32,
-                              dim=(64, 64),
+train_generator = DataGenerator(filenames=splitter.data_train.path, batch_size=32, dim=(64, 64))
+val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=32, dim=(64, 64),
                               true_labels=splitter.data_val.label)
 
 # Initialization
 model = BaselineAutoencoder().cpu()
-# model = torch.load('..\\..\\models\\baseline_autoencoder.pt')
+# model = torch.load('../../models/baseline_autoencoder.pt')
 # model.eval()
 
 inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-print(summary(model,
-              input_size=(train_generator.n_channels, *train_generator.dim)))
+print(summary(model, input_size=(train_generator.n_channels, *train_generator.dim)))
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Training
@@ -71,19 +66,19 @@ for epoch in range(num_epochs):
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
         ax[0].imshow(inp_image[0][0], cmap='gray', vmin=0, vmax=1)
         ax[1].imshow(output_img, cmap='gray', vmin=0, vmax=1)
-        plt.savefig(f'tmp\\epoch{epoch}.png')
+        plt.savefig(f'tmp/epoch{epoch}.png')
         plt.close(fig)
 
     # validation
     with torch.no_grad():
         losses = []
         for batch in tqdm(range(len(val_generator)), desc='Validation'):
-            inp = Variable(torch.from_numpy(val_generator[batch]).float()). \
-                cpu()
+            inp = Variable(torch.from_numpy(val_generator[batch]).float()).cpu()
 
             # forward pass
             output = model(inp)
             losses.extend(outer_loss(output, inp).numpy().mean(axis=(1, 2, 3)))
+
         losses = np.array(losses)
         true_labels = val_generator.get_true_labels()
 
@@ -94,11 +89,9 @@ for epoch in range(num_epochs):
         print(f'MSE on val: {losses.mean()}')
 
         # F1-score
-        precision, recall, thresholds = \
-            precision_recall_curve(y_true=true_labels, probas_pred=losses)
+        precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
         f1_scores = (2 * precision * recall / (precision + recall))
         opt_treshold = thresholds[np.argmax(f1_scores)]
-        print(f'F1-score: {np.max(f1_scores)}. '
-              f'Optimal threshold: {opt_treshold}')
+        print(f'F1-score: {np.max(f1_scores)}. Optimal threshold: {opt_treshold}')
 
-torch.save(model, '..\\..\\models\\baseline_autoencoder.pt')
+torch.save(model, '../../models/baseline_autoencoder.pt')
