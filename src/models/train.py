@@ -4,9 +4,10 @@ import torch.nn as nn
 from torch.autograd import Variable
 from tqdm import tqdm
 from torchsummary import summary
+import mlflow
+import mlflow.pytorch
 
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score, precision_recall_curve
 
 from src.data import DataGenerator, TrainValTestSplitter
 from src.models import BaselineAutoencoder
@@ -14,17 +15,21 @@ from src.models import BaselineAutoencoder
 from src import mkdir_p
 
 np.seterr(divide='ignore', invalid='ignore')
-torch.manual_seed(42)
 
-splitter = TrainValTestSplitter()
-train_generator = DataGenerator(filenames=splitter.data_train.path,
-                                batch_size=32, dim=(64, 64))
-val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=32,
-                              dim=(64, 64),
-                              true_labels=splitter.data_val.label)
+# Parameters
+torch.manual_seed(42)
+batch_size = 32
+image_resolution = (512, 512)
+num_epochs = 2
 
 # Initialization
-model = BaselineAutoencoder().cpu()
+splitter = TrainValTestSplitter()
+train_generator = DataGenerator(filenames=splitter.data_train.path, batch_size=batch_size, dim=image_resolution)
+val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=batch_size, dim=image_resolution,
+                              true_labels=splitter.data_val.label)
+test_generator = DataGenerator(filenames=splitter.data_test.path, batch_size=batch_size, dim=image_resolution,
+                               true_labels=splitter.data_test.label)
+model = BaselineAutoencoder().cuda()
 # model = torch.load('../../models/baseline_autoencoder.pt')
 # model.eval()
 
@@ -32,17 +37,21 @@ inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 print(summary(model, input_size=(train_generator.n_channels,
-                                 *train_generator.dim), device='cpu'))
+                                 *train_generator.dim), device='cuda'))
 mkdir_p('tmp')  # For saving intermediate pictures
 
+# Logging
+mlflow.log_param("batch_size", batch_size)
+mlflow.log_param("image_resolution", image_resolution)
+mlflow.log_param("num_epochs", num_epochs)
+
 # Training
-num_epochs = 100
 for epoch in range(num_epochs):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
 
     for batch in tqdm(range(len(train_generator)), desc='Training'):
-        inp = Variable(torch.from_numpy(train_generator[batch]).float()).cpu()
+        inp = Variable(torch.from_numpy(train_generator[batch]).float()).cuda()
 
         # forward pass
         output = model(inp)
@@ -62,9 +71,9 @@ for epoch in range(num_epochs):
     # forward pass for the last train image
     with torch.no_grad():
         inp_image = train_generator[-1][-1:]
-        inp = torch.from_numpy(inp_image).float()
+        inp = torch.from_numpy(inp_image).float().to('cuda')
         output = model(inp)
-        output_img = output.numpy()[0][0]
+        output_img = output.to('cpu').numpy()[0][0]
 
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
         ax[0].imshow(inp_image[0][0], cmap='gray', vmin=0, vmax=1)
@@ -73,31 +82,13 @@ for epoch in range(num_epochs):
         plt.close(fig)
 
     # validation
-    with torch.no_grad():
-        losses = []
-        for batch in tqdm(range(len(val_generator)), desc='Validation'):
-            inp = Variable(torch.from_numpy(val_generator[batch]).float()).\
-                cpu()
+    model.evaluate(val_generator, 'validation', outer_loss)
 
-            # forward pass
-            output = model(inp)
-            losses.extend(outer_loss(output, inp).numpy().mean(axis=(1, 2, 3)))
+print('=========Training ended==========')
 
-        losses = np.array(losses)
-        true_labels = val_generator.get_true_labels()
+# Test performance
+model.evaluate(test_generator, 'test', outer_loss, log_to_mlflow=True)
 
-        # ROC-AUC
-        print(f'ROC-AUC on val: {roc_auc_score(true_labels, losses)}')
-
-        # MSE
-        print(f'MSE on val: {losses.mean()}')
-
-        # F1-score
-        precision, recall, thresholds = \
-            precision_recall_curve(y_true=true_labels, probas_pred=losses)
-        f1_scores = (2 * precision * recall / (precision + recall))
-        opt_treshold = thresholds[np.argmax(f1_scores)]
-        print(f'F1-score: {np.max(f1_scores)}. '
-              f'Optimal threshold: {opt_treshold}')
-
+# Saving
+mlflow.pytorch.log_model(model, "baseline_autoencoder")
 torch.save(model, '../../models/baseline_autoencoder.pt')
