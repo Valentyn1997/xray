@@ -3,7 +3,6 @@ import torch
 from torch.autograd import Variable
 from sklearn.metrics import roc_auc_score, precision_recall_curve
 import mlflow
-import mlflow.pytorch
 from tqdm import tqdm
 import numpy as np
 
@@ -55,12 +54,12 @@ class BaselineAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
-    def evaluate(self, generator, type, loss, log_to_mlflow=False):
+    def evaluate(self, generator, type, loss, device, log_to_mlflow=False):
 
         with torch.no_grad():
             losses = []
             for batch in tqdm(range(len(generator)), desc=type):
-                inp = Variable(torch.from_numpy(generator[batch]).float()).cuda()
+                inp = Variable(torch.from_numpy(generator[batch]).float()).to(device)
 
                 # forward pass
                 output = self(inp)

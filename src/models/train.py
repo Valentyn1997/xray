@@ -4,7 +4,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 from tqdm import tqdm
 from torchsummary import summary
-import mlflow
 import mlflow.pytorch
 
 import matplotlib.pyplot as plt
@@ -20,7 +19,7 @@ np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 batch_size = 32
 image_resolution = (512, 512)
-num_epochs = 2
+num_epochs = 1000
 
 # Initialization
 splitter = TrainValTestSplitter()
@@ -29,15 +28,17 @@ val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=batch
                               true_labels=splitter.data_val.label)
 test_generator = DataGenerator(filenames=splitter.data_test.path, batch_size=batch_size, dim=image_resolution,
                                true_labels=splitter.data_test.label)
-model = BaselineAutoencoder().cuda()
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f'Available device: {device}')
+model = BaselineAutoencoder().to(device)
 # model = torch.load('../../models/baseline_autoencoder.pt')
 # model.eval()
 
 inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-print(summary(model, input_size=(train_generator.n_channels,
-                                 *train_generator.dim), device='cuda'))
+print(summary(model, input_size=(train_generator.n_channels, *train_generator.dim), device='cuda'))
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Logging
@@ -51,7 +52,7 @@ for epoch in range(num_epochs):
     print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
 
     for batch in tqdm(range(len(train_generator)), desc='Training'):
-        inp = Variable(torch.from_numpy(train_generator[batch]).float()).cuda()
+        inp = Variable(torch.from_numpy(train_generator[batch]).float()).to(device)
 
         # forward pass
         output = model(inp)
@@ -71,7 +72,7 @@ for epoch in range(num_epochs):
     # forward pass for the last train image
     with torch.no_grad():
         inp_image = train_generator[-1][-1:]
-        inp = torch.from_numpy(inp_image).float().to('cuda')
+        inp = torch.from_numpy(inp_image).float().to(device)
         output = model(inp)
         output_img = output.to('cpu').numpy()[0][0]
 
@@ -82,12 +83,12 @@ for epoch in range(num_epochs):
         plt.close(fig)
 
     # validation
-    model.evaluate(val_generator, 'validation', outer_loss)
+    model.evaluate(val_generator, 'validation', outer_loss, device)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_generator, 'test', outer_loss, log_to_mlflow=True)
+model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True)
 
 # Saving
 mlflow.pytorch.log_model(model, "baseline_autoencoder")
