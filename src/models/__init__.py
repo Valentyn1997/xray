@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from torch.autograd import Variable
-from sklearn.metrics import roc_auc_score, precision_recall_curve
+from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 import mlflow
 from tqdm import tqdm
 import numpy as np
@@ -54,7 +54,7 @@ class BaselineAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
-    def evaluate(self, generator, type, loss, device, log_to_mlflow=False):
+    def evaluate(self, generator, type, loss, device, log_to_mlflow=False, opt_threshold=None):
 
         with torch.no_grad():
             losses = []
@@ -77,14 +77,21 @@ class BaselineAutoencoder(nn.Module):
             print(f'MSE on {type}: {mse}')
 
             # F1-score & optimal threshold
-            precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
-            f1_scores = (2 * precision * recall / (precision + recall))
-            f1_score = np.max(f1_scores)
-            opt_treshold = thresholds[np.argmax(f1_scores)]
-            print(f'F1-score on {type}: {f1_score}. Optimal threshold on {type}: {opt_treshold}')
+            if opt_threshold is None: #validation
+                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
+                f1_scores = (2 * precision * recall / (precision + recall))
+                f1 = np.nanmax(f1_scores)
+                opt_threshold = thresholds[np.argmax(f1_scores)]
+            else:
+                y_pred = (losses > opt_threshold).astype(int)
+                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
+
+            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
 
             if log_to_mlflow:
                 mlflow.log_metric("roc-auc", roc_auc)
                 mlflow.log_metric("mse", mse)
-                mlflow.log_metric("f1-score", f1_score)
-                mlflow.log_metric("optimal mse threshold", opt_treshold)
+                mlflow.log_metric("f1-score", f1)
+                mlflow.log_metric("optimal mse threshold", opt_threshold)
+
+            return opt_threshold

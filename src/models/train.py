@@ -19,7 +19,7 @@ np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 batch_size = 32
 image_resolution = (512, 512)
-num_epochs = 4
+num_epochs = 1000
 
 # Initialization
 splitter = TrainValTestSplitter()
@@ -42,6 +42,7 @@ print(summary(model, input_size=(train_generator.n_channels, *train_generator.di
 mkdir_p('tmp')  # For saving intermediate pictures
 
 # Logging
+mlflow.set_experiment('Baseline autoencoder')
 mlflow.log_param("batch_size", batch_size)
 mlflow.log_param("image_resolution", image_resolution)
 mlflow.log_param("num_epochs", num_epochs)
@@ -83,12 +84,12 @@ for epoch in range(num_epochs):
         plt.close(fig)
 
     # validation
-    model.evaluate(val_generator, 'validation', outer_loss, device)
+    opt_threshold = model.evaluate(val_generator, 'validation', outer_loss, device)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True)
+model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=opt_threshold)
 
 # Saving
 mlflow.pytorch.log_model(model, "baseline_autoencoder")
