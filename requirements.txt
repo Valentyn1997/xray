@@ -1,3 +1,4 @@
+mlflow
 tqdm
 torchsummary
 matplotlib
