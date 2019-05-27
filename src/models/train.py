@@ -19,7 +19,7 @@ np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 batch_size = 32
 image_resolution = (512, 512)
-num_epochs = 1000
+num_epochs = 4
 
 # Initialization
 splitter = TrainValTestSplitter()
@@ -33,7 +33,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f'Available device: {device}')
 model = BaselineAutoencoder().to(device)
 # model = torch.load('../../models/baseline_autoencoder.pt')
-# model.eval()
+# model.eval().to(device)
 
 inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
@@ -64,7 +64,7 @@ for epoch in range(num_epochs):
         optimizer.step()
 
     # log
-    print('Loss on last train batch:{:.4f}'.format(loss.data))
+    print(f'Loss on last train batch: {loss.data}')
 
     # shuffle
     train_generator.on_epoch_end()
