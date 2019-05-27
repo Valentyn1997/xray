@@ -77,12 +77,12 @@ class BaselineAutoencoder(nn.Module):
             print(f'MSE on {type}: {mse}')
 
             # F1-score & optimal threshold
-            if opt_threshold is None: #validation
+            if opt_threshold is None:  # validation
                 precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
                 f1_scores = (2 * precision * recall / (precision + recall))
                 f1 = np.nanmax(f1_scores)
                 opt_threshold = thresholds[np.argmax(f1_scores)]
-            else:
+            else:  # testing
                 y_pred = (losses > opt_threshold).astype(int)
                 f1 = f1_score(y_true=true_labels, y_pred=y_pred)
 

@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 
 from src.data import DataGenerator, TrainValTestSplitter
 from src.models import BaselineAutoencoder
-
 from src import mkdir_p
 
 np.seterr(divide='ignore', invalid='ignore')
