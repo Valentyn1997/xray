@@ -160,8 +160,8 @@ class DataGenerator:
             if self.hist_equalisation:
                 img = cv2.equalizeHist(img)
 
-            # Normalizing
-            img = img * 1 / 255
+            # Normalizing (min-max)
+            img = (img - np.min(img))/(np.max(img) - np.min(img))
 
             X[i, 0, :, :] = img
 
