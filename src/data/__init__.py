@@ -156,7 +156,7 @@ class DataGenerator:
             # Resizing
             img = cv2.resize(img, self.dim)
 
-            #Histogram equalization
+            # Histogram equalization
             if self.hist_equalisation:
                 img = cv2.equalizeHist(img)
 
