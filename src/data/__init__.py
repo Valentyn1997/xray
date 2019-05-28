@@ -78,7 +78,7 @@ class DataGenerator:
     """Generates data"""
 
     def __init__(self, filenames, batch_size=16, dim=(512, 512), n_channels=1,
-                 shuffle=True, true_labels=None, random_state=42):
+                 shuffle=True, true_labels=None, random_state=42, hist_equalisation=True):
         """Initialization
         :param filenames: list of filenames, e.g. from TrainValTestSplitter
         :param batch_size: size of batch
@@ -98,6 +98,7 @@ class DataGenerator:
         self.on_epoch_end()
         self.input_shape = (self.batch_size, self.n_channels, *self.dim)
         self.true_labels = np.array(true_labels)
+        self.hist_equalisation = hist_equalisation
 
     def __len__(self) -> int:
         """Denotes the number of batches per epoch"""
@@ -155,8 +156,12 @@ class DataGenerator:
             # Resizing
             img = cv2.resize(img, self.dim)
 
-            # Normalizing
-            img = img * 1 / 255
+            # Histogram equalization
+            if self.hist_equalisation:
+                img = cv2.equalizeHist(img)
+
+            # Normalizing (min-max)
+            img = (img - np.min(img))/(np.max(img) - np.min(img))
 
             X[i, 0, :, :] = img
 

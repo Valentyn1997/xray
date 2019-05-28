@@ -19,14 +19,16 @@ torch.manual_seed(42)
 batch_size = 32
 image_resolution = (512, 512)
 num_epochs = 1000
+hist_equalisation = True
 
 # Initialization
 splitter = TrainValTestSplitter()
-train_generator = DataGenerator(filenames=splitter.data_train.path, batch_size=batch_size, dim=image_resolution)
+train_generator = DataGenerator(filenames=splitter.data_train.path, batch_size=batch_size, dim=image_resolution,
+                                hist_equalisation=hist_equalisation)
 val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=batch_size, dim=image_resolution,
-                              true_labels=splitter.data_val.label)
+                              true_labels=splitter.data_val.label, hist_equalisation=hist_equalisation)
 test_generator = DataGenerator(filenames=splitter.data_test.path, batch_size=batch_size, dim=image_resolution,
-                               true_labels=splitter.data_test.label)
+                               true_labels=splitter.data_test.label, hist_equalisation=hist_equalisation)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f'Available device: {device}')
@@ -45,6 +47,7 @@ mlflow.set_experiment('Baseline autoencoder')
 mlflow.log_param("batch_size", batch_size)
 mlflow.log_param("image_resolution", image_resolution)
 mlflow.log_param("num_epochs", num_epochs)
+mlflow.log_param("hist_equalization", hist_equalisation)
 
 # Training
 for epoch in range(num_epochs):
@@ -91,5 +94,5 @@ print('=========Training ended==========')
 model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=opt_threshold)
 
 # Saving
-mlflow.pytorch.log_model(model, "baseline_autoencoder")
+mlflow.pytorch.log_model(model, 'baseline_autoencoder')
 torch.save(model, '../../models/baseline_autoencoder.pt')
