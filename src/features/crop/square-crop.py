@@ -88,10 +88,14 @@ def crop_squares_and_save(squares, img, file_path):
         os.makedirs(write_dir)
     except OSError:
         pass
-    cv.imwrite(write_dir + "/" + basename(file_path), warped)
+    try:
+      cv.imwrite(write_dir + "/" + basename(file_path), warped)
+    except Exception as e:
+      print(e)
 
 
 def main():
+    print("Started...")
     """
     Runs script to find and crop squares from the data folder with predefined
     folder structure /patient_folder/inner_folder/xxx.png
@@ -101,6 +105,7 @@ def main():
     img_exists = False
     # go to 'patients' dirs
     for pdir in glob(data_dir + "/*"):
+        print(pdir)
         patients_cnt += 1
         # go to positive/negative cases dirs
         for dir2 in glob(pdir + "/*"):
@@ -121,11 +126,13 @@ def main():
             print(pdir + "has no any data!")
             missing_patients += 1
 
-    print("Missing data of " + missing_patients + " patients")
+    if missing_patients > 0:
+      print("Missing data of " + str(missing_patients) + " patients")
+    print("Processed patients: " + str(patients_cnt))
     print('Done')
 
 
 if __name__ == '__main__':
     print(__doc__)
     main()
-    cv.destroyAllWindows()
+    #cv.destroyAllWindows()
