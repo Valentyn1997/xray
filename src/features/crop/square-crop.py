@@ -12,9 +12,8 @@ PY3 = sys.version_info[0] == 3
 if PY3:
     xrange = range
 
-out_path = "../../../../xray/data/train/XR_HAND_CROPPED3"
-data_dir = "../../../../xray/data/train/XR_HAND_test"
-# Image format to write ouput
+out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
+data_dir = "../../../../xray/data/train/XR_HAND"
 image_format = "png"
 
 
@@ -57,58 +56,72 @@ def find_squares(img, min_area=15000, max_skew=0.45):
     return squares
 
 
+def crop_squares_and_save(squares, img, file_path):
+    rect = cv.minAreaRect(squares[0])
+    box = cv.boxPoints(rect)
+    box = np.int0(box)
+
+    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
+
+    width = int(rect[1][0])
+    height = int(rect[1][1])
+
+    src_pts = box.astype("float32")
+    dst_pts = np.array([[0, height - 1],
+                        [0, 0],
+                        [width - 1, 0],
+                        [width - 1, height - 1]],
+                       dtype="float32")
+
+    # the perspective transformation matrix
+    M = cv.getPerspectiveTransform(src_pts, dst_pts)
+    warped = cv.warpPerspective(img, M, (width, height))
+
+    # show image
+    # cv.imshow("crop_img.jpg", warped)
+
+    write_dir = \
+        out_path + "/" + \
+        basename(dirname(dirname(file_path))) + "/" + \
+        basename(dirname(file_path))
+    try:
+        os.makedirs(write_dir)
+    except OSError:
+        pass
+    cv.imwrite(write_dir + "/" + basename(file_path), warped)
+
+
 def main():
     """
     Runs script to find and crop squares from the data folder with predefined
     folder structure /patient_folder/inner_folder/xxx.png
     """
-    for dir in glob(data_dir + "/*"):
-        for dir2 in glob(dir + "/*"):
+    patients_cnt = 0
+    missing_patients = 0
+    img_exists = False
+    # go to 'patients' dirs
+    for pdir in glob(data_dir + "/*"):
+        patients_cnt += 1
+        # go to positive/negative cases dirs
+        for dir2 in glob(pdir + "/*"):
+            # get images
             for fn in glob(dir2 + "/*." + image_format):
+                img_exists = True
                 img = cv.imread(fn)
-                print(type(img))
                 squares = find_squares(img)
                 # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
-
                 # show image
                 # cv.imshow('squares', img)
 
                 if squares:
-                    rect = cv.minAreaRect(squares[0])
-
-                    box = cv.boxPoints(rect)
-                    box = np.int0(box)
-
-                    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
-
-                    width = int(rect[1][0])
-                    height = int(rect[1][1])
-
-                    src_pts = box.astype("float32")
-                    dst_pts = np.array([[0, height - 1],
-                                        [0, 0],
-                                        [width - 1, 0],
-                                        [width - 1, height - 1]],
-                                       dtype="float32")
-
-                    # the perspective transformation matrix
-                    M = cv.getPerspectiveTransform(src_pts, dst_pts)
-                    warped = cv.warpPerspective(img, M, (width, height))
-
-                    # show image
-                    # cv.imshow("crop_img.jpg", warped)
-
-                    write_dir = \
-                        out_path + "/" + \
-                        basename(dirname(dirname(fn))) + "/" + \
-                        basename(dirname(fn))
-                    try:
-                        os.makedirs(write_dir)
-                    except OSError:
-                        pass
-                    cv.imwrite(write_dir + "/" + basename(fn), warped)
+                    crop_squares_and_save(squares, img, fn)
                     # cv.waitKey(0)
 
+        if not img_exists:
+            print(pdir + "has no any data!")
+            missing_patients += 1
+
+    print("Missing data of " + missing_patients + " patients")
     print('Done')
 
 
