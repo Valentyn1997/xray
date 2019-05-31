@@ -45,7 +45,8 @@ def find_squares(img, min_area=15000, max_skew=0.45):
             for cnt in contours:
                 cnt_len = cv.arcLength(cnt, True)
                 cnt = cv.approxPolyDP(cnt, 0.02 * cnt_len, True)
-                if len(cnt) >= 4 and cv.contourArea(cnt) > min_area and cv.isContourConvex(cnt):
+                if len(cnt) >= 4 and cv.contourArea(cnt) > min_area \
+                        and cv.isContourConvex(cnt):
                     cnt = cnt.reshape(-1, 2)
                     max_cos = np.max([angle_cos(cnt[i], cnt[(i + 1) % 4],
                                                 cnt[(i + 2) % 4])
