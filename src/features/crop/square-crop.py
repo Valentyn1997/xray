@@ -96,6 +96,7 @@ def main():
     folder structure /patient_folder/inner_folder/xxx.png
     """
     patients_cnt = 0
+    missing_patients = 0
     img_exists = False
     # go to 'patients' dirs
     for pdir in glob(data_dir + "/*"):
@@ -117,6 +118,9 @@ def main():
 
         if not img_exists:
             print(pdir + "has no any data!")
+            missing_patients += 1
+
+    print("Missing data of " + missing_patients + " patients")
     print('Done')
 
 
