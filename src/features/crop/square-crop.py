@@ -127,7 +127,7 @@ def main():
             missing_patients += 1
 
     if missing_patients > 0:
-      print("Missing data of " + str(missing_patients) + " patients")
+        print("Missing data of " + str(missing_patients) + " patients")
     print("Processed patients: " + str(patients_cnt))
     print('Done')
 
@@ -135,4 +135,4 @@ def main():
 if __name__ == '__main__':
     print(__doc__)
     main()
-    #cv.destroyAllWindows()
+    # cv.destroyAllWindows()
