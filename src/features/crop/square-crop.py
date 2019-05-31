@@ -89,9 +89,9 @@ def crop_squares_and_save(squares, img, file_path):
     except OSError:
         pass
     try:
-      cv.imwrite(write_dir + "/" + basename(file_path), warped)
+        cv.imwrite(write_dir + "/" + basename(file_path), warped)
     except Exception as e:
-      print(e)
+        print(e)
 
 
 def main():
