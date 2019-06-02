@@ -12,10 +12,8 @@ PY3 = sys.version_info[0] == 3
 if PY3:
     xrange = range
 
-out_path = "../../../../xray/data/train/XR_HAND_CROPPED3"
-data_dir = "../../../../xray/data/train/XR_HAND_test"
-# Image format to write ouput
-image_format = "png"
+out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
+data_dir = "../../../../xray/data/train/XR_HAND"
 
 
 def angle_cos(p0, p1, p2):
@@ -57,62 +55,84 @@ def find_squares(img, min_area=15000, max_skew=0.45):
     return squares
 
 
+def crop_squares(squares, img):
+    rect = cv.minAreaRect(squares[0])
+    box = cv.boxPoints(rect)
+    box = np.int0(box)
+
+    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
+
+    width = int(rect[1][0])
+    height = int(rect[1][1])
+
+    src_pts = box.astype("float32")
+    dst_pts = np.array([[0, height - 1],
+                        [0, 0],
+                        [width - 1, 0],
+                        [width - 1, height - 1]],
+                       dtype="float32")
+
+    # the perspective transformation matrix
+    M = cv.getPerspectiveTransform(src_pts, dst_pts)
+    warped = cv.warpPerspective(img, M, (width, height))
+
+    # show image
+    # cv.imshow("crop_img.jpg", warped)
+
+    return warped
+
+
 def main():
+    print("Started...")
     """
     Runs script to find and crop squares from the data folder with predefined
     folder structure /patient_folder/inner_folder/xxx.png
     """
-    for dir in glob(data_dir + "/*"):
-        for dir2 in glob(dir + "/*"):
-            for fn in glob(dir2 + "/*." + image_format):
+    patients_cnt = 0
+    missing_patients = 0
+    img_exists = False
+    # go to 'patients' dirs
+    for pdir in glob(data_dir + "/*"):
+        print(pdir)
+        patients_cnt += 1
+        # go to positive/negative cases dirs
+        for dir2 in glob(pdir + "/*"):
+            # get images
+            for fn in glob(dir2 + "/*"):
+                img_exists = True
                 img = cv.imread(fn)
-                print(type(img))
                 squares = find_squares(img)
+                # visualise contours
                 # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
-
                 # show image
                 # cv.imshow('squares', img)
 
+                write_dir = \
+                    out_path + "/" + \
+                    basename(dirname(dirname(fn))) + "/" + \
+                    basename(dirname(fn))
+                try:
+                    os.makedirs(write_dir)
+                except OSError:
+                    pass
+
                 if squares:
-                    rect = cv.minAreaRect(squares[0])
-
-                    box = cv.boxPoints(rect)
-                    box = np.int0(box)
-
-                    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
-
-                    width = int(rect[1][0])
-                    height = int(rect[1][1])
-
-                    src_pts = box.astype("float32")
-                    dst_pts = np.array([[0, height - 1],
-                                        [0, 0],
-                                        [width - 1, 0],
-                                        [width - 1, height - 1]],
-                                       dtype="float32")
-
-                    # the perspective transformation matrix
-                    M = cv.getPerspectiveTransform(src_pts, dst_pts)
-                    warped = cv.warpPerspective(img, M, (width, height))
-
-                    # show image
-                    # cv.imshow("crop_img.jpg", warped)
-
-                    write_dir = \
-                        out_path + "/" + \
-                        basename(dirname(dirname(fn))) + "/" + \
-                        basename(dirname(fn))
-                    try:
-                        os.makedirs(write_dir)
-                    except OSError:
-                        pass
+                    warped = crop_squares(squares, img)
                     cv.imwrite(write_dir + "/" + basename(fn), warped)
-                    # cv.waitKey(0)
+                else:
+                    cv.imwrite(write_dir + "/" + basename(fn), img)
+            # cv.waitKey(0)
 
+    if not img_exists:
+        print(pdir + "has no any data!")
+        missing_patients += 1
+    if missing_patients > 0:
+        print("Missing data of " + str(missing_patients) + " patients")
+    print("Processed patients: " + str(patients_cnt))
     print('Done')
 
 
 if __name__ == '__main__':
     print(__doc__)
     main()
-    cv.destroyAllWindows()
+    # cv.destroyAllWindows()
