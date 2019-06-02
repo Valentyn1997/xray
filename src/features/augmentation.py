@@ -1,5 +1,4 @@
 import numpy as np
-import imgaug.augmenters as iaa
 import imgaug as ia
 from skimage import img_as_ubyte
 from skimage import img_as_float
