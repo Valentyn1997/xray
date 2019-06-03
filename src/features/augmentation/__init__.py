@@ -1,11 +1,11 @@
 import numpy as np
 import imgaug as ia
-from imgaug import augmenters as iaa
 from skimage import img_as_ubyte
 from skimage import img_as_float
-import cv2
-import matplotlib.pyplot as plt
-from src.data import DataGenerator, TrainValTestSplitter
+# import cv2
+# import matplotlib.pyplot as plt
+# from src.data import DataGenerator, TrainValTestSplitter
+# from imgaug import augmenters as iaa
 
 
 class Augmentation:
@@ -25,7 +25,7 @@ class Augmentation:
         Transforms the image into the right format and
         augment image
         :param image: list of images (*dim) or array (n, ch, *dim)
-        :return: augmented images (n, ch, *dim)
+        :return: augmented images array (n, ch, *dim)  / list
         """
         if isinstance(image, list):
             output_img = self._augment_list(image)
@@ -33,7 +33,6 @@ class Augmentation:
             output_img = self._augment_array(image)
 
         return output_img
-
 
     def _augment_array(self, image):
         """
@@ -67,14 +66,13 @@ class Augmentation:
         inp_aug = self.seq.augment_images(inp_int)
         # Takes augmented images and transforms to float
         inp_aug_float = [img_as_float(i) for i in inp_aug]
-        # Transform to array and add one channel
-        array_img = np.asarray(inp_aug_float)
-        img_aug_list = array_img[:, np.newaxis, :, :]
+        # Transform to array and add one channel works only with same size images
+        # array_img = np.asarray(inp_aug_float)
+        # img_aug_list = array_img[:, np.newaxis, :, :]
 
-        return img_aug_list
+        return inp_aug_float
 
-
-#### Example and test
+# # Example and test
 # # set augmentation to flip upside down
 # seq = iaa.Sequential([
 #     iaa.Flipud(1)
@@ -106,7 +104,7 @@ class Augmentation:
 #
 # img = cv2.imread('../../data/train/XR_HAND/patient00008/study1_positive/image1.png')
 # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-# img2 = cv2.imread('../../data/train/XR_HAND/patient00008/study1_positive/image2.png')
+# img2 = cv2.imread('../../data/train/XR_HAND/patient00050/study1_negative/image1.png')
 # img2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
 #
 # test_list = [img, img2]
@@ -114,6 +112,5 @@ class Augmentation:
 #
 # fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
 # ax[0].imshow(test_list[0], cmap='gray')
-# ax[1].imshow(test_list_aug[0][0], cmap='gray', vmin=0, vmax=1)
+# ax[1].imshow(test_list_aug[0], cmap='gray', vmin=0, vmax=1)
 # plt.show()
-
