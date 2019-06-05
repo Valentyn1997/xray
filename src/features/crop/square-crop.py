@@ -14,7 +14,6 @@ if PY3:
 
 out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
 data_dir = "../../../../xray/data/train/XR_HAND"
-image_format = "png"
 
 
 def angle_cos(p0, p1, p2):
@@ -56,7 +55,7 @@ def find_squares(img, min_area=20000, max_skew=0.45):
     return squares
 
 
-def crop_squares_and_save(squares, img, file_path):
+def crop_squares(squares, img):
     rect = cv.minAreaRect(squares[0])
     box = cv.boxPoints(rect)
     box = np.int0(box)
@@ -80,18 +79,11 @@ def crop_squares_and_save(squares, img, file_path):
     # show image
     # cv.imshow("crop_img.jpg", warped)
 
-    write_dir = \
-        out_path + "/" + \
-        basename(dirname(dirname(file_path))) + "/" + \
-        basename(dirname(file_path))
-    try:
-        os.makedirs(write_dir)
-    except OSError:
-        pass
-    cv.imwrite(write_dir + "/" + basename(file_path), warped)
+    return warped
 
 
 def main():
+    print("Started...")
     """
     Runs script to find and crop squares from the data folder with predefined
     folder structure /patient_folder/inner_folder/xxx.png
@@ -101,31 +93,46 @@ def main():
     img_exists = False
     # go to 'patients' dirs
     for pdir in glob(data_dir + "/*"):
+        print(pdir)
         patients_cnt += 1
         # go to positive/negative cases dirs
         for dir2 in glob(pdir + "/*"):
             # get images
-            for fn in glob(dir2 + "/*." + image_format):
+            for fn in glob(dir2 + "/*"):
                 img_exists = True
                 img = cv.imread(fn)
                 squares = find_squares(img)
+                # visualise contours
                 # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
                 # show image
                 # cv.imshow('squares', img)
 
+                write_dir = \
+                    out_path + "/" + \
+                    basename(dirname(dirname(fn))) + "/" + \
+                    basename(dirname(fn))
+                try:
+                    os.makedirs(write_dir)
+                except OSError:
+                    pass
+
                 if squares:
-                    crop_squares_and_save(squares, img, fn)
-                    # cv.waitKey(0)
+                    warped = crop_squares(squares, img)
+                    cv.imwrite(write_dir + "/" + basename(fn), warped)
+                else:
+                    cv.imwrite(write_dir + "/" + basename(fn), img)
+            # cv.waitKey(0)
 
-        if not img_exists:
-            print(pdir + "has no any data!")
-            missing_patients += 1
-
-    print("Missing data of " + missing_patients + " patients")
+    if not img_exists:
+        print(pdir + "has no any data!")
+        missing_patients += 1
+    if missing_patients > 0:
+        print("Missing data of " + str(missing_patients) + " patients")
+    print("Processed patients: " + str(patients_cnt))
     print('Done')
 
 
 if __name__ == '__main__':
     print(__doc__)
     main()
-    cv.destroyAllWindows()
+    # cv.destroyAllWindows()
