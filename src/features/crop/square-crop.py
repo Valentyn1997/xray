@@ -22,7 +22,7 @@ def angle_cos(p0, p1, p2):
     return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1) * np.dot(d2, d2)))
 
 
-def find_squares(img, min_area=15000, max_skew=0.45):
+def find_squares(img, min_area=20000, max_skew=0.45):
     """
     A method to find inner square images on bigger images
     :param min_area: specifies minimal square area in pixels
