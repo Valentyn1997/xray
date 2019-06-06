@@ -4,18 +4,19 @@ import glob
 import pandas as pd
 import re
 from sklearn.model_selection import GroupShuffleSplit
+from src import XR_HAND_PATH
 import matplotlib.pyplot as plt
 
 
 class TrainValTestSplitter:
 
-    def __init__(self, path_to_data='../../data/train/XR_HAND/*/*/*',
-                 show_labels_dist=False):
+    def __init__(self, path_to_data=XR_HAND_PATH, show_labels_dist=False):
         """
         Train-validation-test splitter, stores all the filenames
         :param path_to_data: for glob.glob to find all the images path
         :param show_labels_dist: show plot of distributions of labels
         """
+        path_to_data = f'{path_to_data}/*/*/*'
         self.data = pd.DataFrame()
         self.data['path'] = glob.glob(path_to_data)
         self.data['label'] = self.data['path']. \
@@ -99,6 +100,7 @@ class DataGenerator:
         self.input_shape = (self.batch_size, self.n_channels, *self.dim)
         self.true_labels = np.array(true_labels)
         self.hist_equalisation = hist_equalisation
+        self.max_shape = (600, 600)
 
     def __len__(self) -> int:
         """Denotes the number of batches per epoch"""
@@ -145,15 +147,16 @@ class DataGenerator:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
             # Centering & padding with black color (for the same dimension)
-            tb, uneven_tb = int((512 - img.shape[0]) / 2), \
-                               (512 - img.shape[0]) % 2
-            lr, uneven_lr = int((512 - img.shape[1]) / 2), \
-                               (512 - img.shape[1]) % 2
-            img = cv2.copyMakeBorder(img, tb, tb + uneven_tb, lr,
-                                     lr + uneven_lr,
-                                     cv2.BORDER_CONSTANT, value=0)
+            tb, uneven_tb = int((self.max_shape[0] - img.shape[0]) / 2), \
+                            (self.max_shape[0] - img.shape[0]) % 2
+            lr, uneven_lr = int((self.max_shape[1] - img.shape[1]) / 2), \
+                            (self.max_shape[1] - img.shape[1]) % 2
+            try:
+                img = cv2.copyMakeBorder(img, tb, tb + uneven_tb, lr, lr + uneven_lr, cv2.BORDER_CONSTANT, value=0)
+            except:
+                print(f'Too big image: {img.shape}')
 
-            # Resizing
+                # Resizing
             img = cv2.resize(img, self.dim)
 
             # Histogram equalization
@@ -161,7 +164,7 @@ class DataGenerator:
                 img = cv2.equalizeHist(img)
 
             # Normalizing (min-max)
-            img = (img - np.min(img))/(np.max(img) - np.min(img))
+            img = (img - np.min(img)) / (np.max(img) - np.min(img))
 
             X[i, 0, :, :] = img
 
