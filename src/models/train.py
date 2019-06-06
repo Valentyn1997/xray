@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from src.data import DataGenerator, TrainValTestSplitter
 from src.models import BottleneckAutoencoder
 from src.utils import mkdir_p
-from src import XR_HAND_CROPPED_PATH
+from src import XR_HAND_CROPPED_PATH, TMP_IMAGES_DIR, MODELS_DIR
 
 np.seterr(divide='ignore', invalid='ignore')
 
