@@ -78,6 +78,9 @@ def crop_squares(squares, img):
     M = cv.getPerspectiveTransform(src_pts, dst_pts)
     warped = cv.warpPerspective(img, M, (width, height))
 
+    if width > height:
+        warped = imutils.rotate_bound(warped, 270)
+
     if SHOW:
         cv.imshow("crop_img.jpg", warped)
 
