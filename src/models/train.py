@@ -1,15 +1,10 @@
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-from tqdm import tqdm
 from torchsummary import summary
 import mlflow.pytorch
 
 import matplotlib.pyplot as plt
 
 from src.data import DataGenerator, TrainValTestSplitter
-from src.models import BaselineAutoencoder, BottleneckAutoencoder
+from src.models import *
 from src.utils import mkdir_p
 from src import *
 
@@ -22,6 +17,7 @@ image_resolution = (512, 512)
 num_epochs = 500
 hist_equalisation = False
 cropped = True
+
 
 # Initialization
 splitter = TrainValTestSplitter(path_to_data=XR_HAND_CROPPED_PATH)
@@ -44,14 +40,6 @@ outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 print(summary(model, input_size=(train_generator.n_channels, *train_generator.dim), device=device))
 mkdir_p('tmp')  # For saving intermediate pictures
-
-# Logging
-mlflow.set_experiment('Bottleneck autoencoder')
-mlflow.log_param("batch_size", batch_size)
-mlflow.log_param("image_resolution", image_resolution)
-mlflow.log_param("num_epochs", num_epochs)
-mlflow.log_param("hist_equalization", hist_equalisation)
-mlflow.log_param("cropped", cropped)
 
 # Training
 for epoch in range(num_epochs):
@@ -93,6 +81,14 @@ for epoch in range(num_epochs):
     opt_threshold = model.evaluate(val_generator, 'validation', outer_loss, device)
 
 print('=========Training ended==========')
+
+# Logging
+mlflow.set_experiment('Bottleneck autoencoder')
+mlflow.log_param("batch_size", batch_size)
+mlflow.log_param("image_resolution", image_resolution)
+mlflow.log_param("num_epochs", num_epochs)
+mlflow.log_param("hist_equalization", hist_equalisation)
+mlflow.log_param("cropped", cropped)
 
 # Test performance
 model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=opt_threshold)
