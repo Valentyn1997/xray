@@ -20,3 +20,4 @@ python-dotenv>=0.5.1
 numpy
 opencv-python
 imutils
+imgaug
