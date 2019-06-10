@@ -14,6 +14,7 @@ if PY3:
 
 out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
 data_dir = "../../../../xray/data/train/XR_HAND"
+SHOW = False
 
 
 def angle_cos(p0, p1, p2):
@@ -21,7 +22,7 @@ def angle_cos(p0, p1, p2):
     return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1) * np.dot(d2, d2)))
 
 
-def find_squares(img, min_area=15000, max_skew=0.45):
+def find_squares(img, min_area=100000, max_skew=0.45):
     """
     A method to find inner square images on bigger images
     :param min_area: specifies minimal square area in pixels
@@ -44,7 +45,7 @@ def find_squares(img, min_area=15000, max_skew=0.45):
             for cnt in contours:
                 cnt_len = cv.arcLength(cnt, True)
                 cnt = cv.approxPolyDP(cnt, 0.02 * cnt_len, True)
-                if len(cnt) >= 4 and cv.contourArea(cnt) > min_area \
+                if len(cnt) >= 4 and cv.contourArea(cnt) >= min_area \
                         and cv.isContourConvex(cnt):
                     cnt = cnt.reshape(-1, 2)
                     max_cos = np.max([angle_cos(cnt[i], cnt[(i + 1) % 4],
@@ -60,7 +61,8 @@ def crop_squares(squares, img):
     box = cv.boxPoints(rect)
     box = np.int0(box)
 
-    # cv.drawContours(img, [box], 0, (0, 0, 255), 2)
+    if SHOW:
+        cv.drawContours(img, [box], 0, (0, 0, 255), 2)
 
     width = int(rect[1][0])
     height = int(rect[1][1])
@@ -76,8 +78,11 @@ def crop_squares(squares, img):
     M = cv.getPerspectiveTransform(src_pts, dst_pts)
     warped = cv.warpPerspective(img, M, (width, height))
 
-    # show image
-    # cv.imshow("crop_img.jpg", warped)
+    if width > height:
+        warped = imutils.rotate_bound(warped, 270)
+
+    if SHOW:
+        cv.imshow("crop_img.jpg", warped)
 
     return warped
 
@@ -102,10 +107,10 @@ def main():
                 img_exists = True
                 img = cv.imread(fn)
                 squares = find_squares(img)
-                # visualise contours
-                # cv.drawContours(img, squares, 0, (0, 255, 0), 3)
-                # show image
-                # cv.imshow('squares', img)
+
+                if SHOW:
+                    cv.drawContours(img, squares, 0, (0, 255, 0), 3)
+                    cv.imshow('squares', img)
 
                 write_dir = \
                     out_path + "/" + \
@@ -121,11 +126,10 @@ def main():
                     cv.imwrite(write_dir + "/" + basename(fn), warped)
                 else:
                     cv.imwrite(write_dir + "/" + basename(fn), img)
-            # cv.waitKey(0)
 
-    if not img_exists:
-        print(pdir + "has no any data!")
-        missing_patients += 1
+        if not img_exists:
+            print(pdir + "has no any data!")
+            missing_patients += 1
     if missing_patients > 0:
         print("Missing data of " + str(missing_patients) + " patients")
     print("Processed patients: " + str(patients_cnt))
