@@ -12,4 +12,3 @@ TMP_IMAGES_DIR = f'{ROOT_PATH}/models/tmp'
 os.makedirs(TMP_IMAGES_DIR, exist_ok=True)
 
 MLFLOW_TRACKING_URI = 'http://localhost:5001'
-
