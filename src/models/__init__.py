@@ -5,6 +5,9 @@ from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 import mlflow
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
+
+from src import TMP_IMAGES_DIR
 
 
 class BaselineAutoencoder(nn.Module):
@@ -54,30 +57,38 @@ class BaselineAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
-    def evaluate(self, generator, type, loss, device, log_to_mlflow=False, opt_threshold=None):
+    def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
+        with torch.no_grad():
+            inp = inp_image.to(device)
+            output = self(inp)
+            output_img = output.to('cpu')
+
+            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
+            plt.close(fig)
+
+    def evaluate(self, loader, type, loss, device, log_to_mlflow=False, opt_threshold=None):
 
         with torch.no_grad():
             losses = []
-            for batch in tqdm(range(len(generator)), desc=type):
-                inp = Variable(torch.from_numpy(generator[batch]).float()).to(device)
+            true_labels = []
+            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+                inp = batch_data['image'].to(device)
 
                 # forward pass
                 output = self(inp)
                 losses.extend(loss(output, inp).to('cpu').numpy().mean(axis=(1, 2, 3)))
-
-            generator.on_epoch_end()
+                true_labels.extend(batch_data['label'].numpy())
 
             losses = np.array(losses)
-            true_labels = generator.get_true_labels()
+            true_labels = np.array(true_labels)
 
             # ROC-AUC
             roc_auc = roc_auc_score(true_labels, losses)
-            print(f'ROC-AUC on {type}: {roc_auc}')
-
             # MSE
             mse = losses.mean()
-            print(f'MSE on {type}: {mse}')
-
             # F1-score & optimal threshold
             if opt_threshold is None:  # validation
                 precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
@@ -88,15 +99,20 @@ class BaselineAutoencoder(nn.Module):
                 y_pred = (losses > opt_threshold).astype(int)
                 f1 = f1_score(y_true=true_labels, y_pred=y_pred)
 
+            print(f'ROC-AUC on {type}: {roc_auc}')
+            print(f'MSE on {type}: {mse}')
             print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
 
-            if log_to_mlflow:
-                mlflow.log_metric("roc-auc", roc_auc)
-                mlflow.log_metric("mse", mse)
-                mlflow.log_metric("f1-score", f1)
-                mlflow.log_metric("optimal mse threshold", opt_threshold)
+            metrics = {"roc-auc": roc_auc,
+                       "mse": mse,
+                       "f1-score": f1,
+                       "optimal mse threshold": opt_threshold}
 
-            return opt_threshold
+            if log_to_mlflow:
+                for (metric, value) in metrics.items():
+                    mlflow.log_metric(metric, value)
+
+            return metrics
 
 
 class BottleneckAutoencoder(BaselineAutoencoder):

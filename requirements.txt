@@ -1,6 +1,6 @@
+torchvision
 mlflow
 tqdm
-torchsummary
 matplotlib
 scikit-learn
 pandas
