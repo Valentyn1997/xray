@@ -13,4 +13,3 @@ os.makedirs(TMP_IMAGES_DIR, exist_ok=True)
 
 MLFLOW_TRACKING_URI = 'http://localhost:5001'
 
-

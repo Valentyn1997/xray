@@ -7,37 +7,32 @@ import numpy as np
 
 def summary(model, input_size, batch_size=-1, device="cuda"):
 
+    def hook(module, input, output):
+        class_name = str(module.__class__).split(".")[-1].split("'")[0]
+        module_idx = len(output_summary)
+
+        m_key = "%s-%i" % (class_name, module_idx + 1)
+        output_summary[m_key] = OrderedDict()
+        output_summary[m_key]["input_shape"] = list(input[0].size())
+        output_summary[m_key]["input_shape"][0] = batch_size
+        if isinstance(output, (list, tuple)):
+            output_summary[m_key]["output_shape"] = [
+                [-1] + list(o.size())[1:] for o in output
+            ]
+        else:
+            output_summary[m_key]["output_shape"] = list(output.size())
+            output_summary[m_key]["output_shape"][0] = batch_size
+
+        params = 0
+        if hasattr(module, "weight") and hasattr(module.weight, "size"):
+            params += torch.prod(torch.LongTensor(list(module.weight.size())))
+            output_summary[m_key]["trainable"] = module.weight.requires_grad
+        if hasattr(module, "bias") and hasattr(module.bias, "size"):
+            params += torch.prod(torch.LongTensor(list(module.bias.size())))
+        output_summary[m_key]["nb_params"] = params
+
     def register_hook(module):
-
-        def hook(module, input, output):
-            class_name = str(module.__class__).split(".")[-1].split("'")[0]
-            module_idx = len(output_summary)
-
-            m_key = "%s-%i" % (class_name, module_idx + 1)
-            output_summary[m_key] = OrderedDict()
-            output_summary[m_key]["input_shape"] = list(input[0].size())
-            output_summary[m_key]["input_shape"][0] = batch_size
-            if isinstance(output, (list, tuple)):
-                output_summary[m_key]["output_shape"] = [
-                    [-1] + list(o.size())[1:] for o in output
-                ]
-            else:
-                output_summary[m_key]["output_shape"] = list(output.size())
-                output_summary[m_key]["output_shape"][0] = batch_size
-
-            params = 0
-            if hasattr(module, "weight") and hasattr(module.weight, "size"):
-                params += torch.prod(torch.LongTensor(list(module.weight.size())))
-                output_summary[m_key]["trainable"] = module.weight.requires_grad
-            if hasattr(module, "bias") and hasattr(module.bias, "size"):
-                params += torch.prod(torch.LongTensor(list(module.bias.size())))
-            output_summary[m_key]["nb_params"] = params
-
-        if (
-            not isinstance(module, nn.Sequential)
-            and not isinstance(module, nn.ModuleList)
-            and not (module == model)
-        ):
+        if not isinstance(module, nn.Sequential) and not isinstance(module, nn.ModuleList) and not (module == model):
             hooks.append(module.register_forward_hook(hook))
 
     device = device.lower()
