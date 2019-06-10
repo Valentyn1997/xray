@@ -95,4 +95,3 @@ class MURASubset(Dataset):
             sample = self.transform(sample)
 
         return sample
-

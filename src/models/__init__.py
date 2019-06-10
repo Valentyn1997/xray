@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-from torch.autograd import Variable
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 import mlflow
 from tqdm import tqdm

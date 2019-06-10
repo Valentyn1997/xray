@@ -11,27 +11,27 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
 
         def hook(module, input, output):
             class_name = str(module.__class__).split(".")[-1].split("'")[0]
-            module_idx = len(summary)
+            module_idx = len(output_summary)
 
             m_key = "%s-%i" % (class_name, module_idx + 1)
-            summary[m_key] = OrderedDict()
-            summary[m_key]["input_shape"] = list(input[0].size())
-            summary[m_key]["input_shape"][0] = batch_size
+            output_summary[m_key] = OrderedDict()
+            output_summary[m_key]["input_shape"] = list(input[0].size())
+            output_summary[m_key]["input_shape"][0] = batch_size
             if isinstance(output, (list, tuple)):
-                summary[m_key]["output_shape"] = [
+                output_summary[m_key]["output_shape"] = [
                     [-1] + list(o.size())[1:] for o in output
                 ]
             else:
-                summary[m_key]["output_shape"] = list(output.size())
-                summary[m_key]["output_shape"][0] = batch_size
+                output_summary[m_key]["output_shape"] = list(output.size())
+                output_summary[m_key]["output_shape"][0] = batch_size
 
             params = 0
             if hasattr(module, "weight") and hasattr(module.weight, "size"):
                 params += torch.prod(torch.LongTensor(list(module.weight.size())))
-                summary[m_key]["trainable"] = module.weight.requires_grad
+                output_summary[m_key]["trainable"] = module.weight.requires_grad
             if hasattr(module, "bias") and hasattr(module.bias, "size"):
                 params += torch.prod(torch.LongTensor(list(module.bias.size())))
-            summary[m_key]["nb_params"] = params
+            output_summary[m_key]["nb_params"] = params
 
         if (
             not isinstance(module, nn.Sequential)
@@ -60,7 +60,7 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
     # print(type(x[0]))
 
     # create properties
-    summary = OrderedDict()
+    output_summary = OrderedDict()
     hooks = []
 
     # register hook
@@ -81,18 +81,18 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
     total_params = 0
     total_output = 0
     trainable_params = 0
-    for layer in summary:
+    for layer in output_summary:
         # input_shape, output_shape, trainable, nb_params
         line_new = "{:>20}  {:>25} {:>15}".format(
             layer,
-            str(summary[layer]["output_shape"]),
-            "{0:,}".format(summary[layer]["nb_params"]),
+            str(output_summary[layer]["output_shape"]),
+            "{0:,}".format(output_summary[layer]["nb_params"]),
         )
-        total_params += summary[layer]["nb_params"]
-        total_output += np.prod(summary[layer]["output_shape"])
-        if "trainable" in summary[layer]:
-            if summary[layer]["trainable"]:
-                trainable_params += summary[layer]["nb_params"]
+        total_params += output_summary[layer]["nb_params"]
+        total_output += np.prod(output_summary[layer]["output_shape"])
+        if "trainable" in output_summary[layer]:
+            if output_summary[layer]["trainable"]:
+                trainable_params += output_summary[layer]["nb_params"]
         print(line_new)
 
     # assume 4 bytes/number (float on cuda).
@@ -112,4 +112,4 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
     print("Estimated Total Size (MB): %0.2f" % total_size)
     print("----------------------------------------------------------------")
 
-    return summary, int(trainable_params)
+    return output_summary, int(trainable_params)
