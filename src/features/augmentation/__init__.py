@@ -34,6 +34,7 @@ class Augmentation(object):
         :param image: list of images (*dim) or array (n, ch, *dim)
         :return: augmented images array (n, ch, *dim)  / list
         """
+        output_img = None
         if isinstance(image, list):
             output_img = self._augment_list(image)
         if isinstance(image, np.ndarray):
@@ -62,7 +63,6 @@ class Augmentation(object):
         inp_aug_array = img_as_float(inp_aug_reshape)
 
         return inp_aug_array
-
 
     def _augment_array(self, image):
         """
