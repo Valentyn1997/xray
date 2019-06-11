@@ -8,7 +8,7 @@ from skimage import img_as_float
 # from imgaug import augmenters as iaa
 
 
-class Augmentation:
+class Augmentation(object):
     """Augment data"""
 
     def __init__(self, seq, random_state=42):
@@ -20,6 +20,13 @@ class Augmentation:
         if random_state is not None:
             ia.seed(random_state)
 
+    def __call__(self, sample):
+        """
+        For using as a Transform in pytorch
+        """
+        sample['image'] = self.augment(sample['image'])
+        return sample
+
     def augment(self, image):
         """
         Transforms the image into the right format and
@@ -30,9 +37,32 @@ class Augmentation:
         if isinstance(image, list):
             output_img = self._augment_list(image)
         if isinstance(image, np.ndarray):
-            output_img = self._augment_array(image)
+            if image.ndim == 2:
+                output_img = self._augment_grayscale_image(image)
+            else:
+                output_img = self._augment_array(image)
 
         return output_img
+
+    def _augment_grayscale_image(self, image):
+        """
+        Transforms array of images into the right format and
+        augment image
+        :param image: array (*dim)
+        :return: augmented images (*dim)
+        """
+        # Takes the image array and transforms to uint8
+        inp_int = img_as_ubyte(image)
+        # Adding the 1 channel to the last position
+        inp_reshape = np.reshape(inp_int, (*inp_int.shape, 1))
+        # Augment image according to specification from input
+        inp_aug = self.seq.augment_image(inp_reshape)
+        # Removing the chanel
+        inp_aug_reshape = inp_aug[:, :, 0]
+        inp_aug_array = img_as_float(inp_aug_reshape)
+
+        return inp_aug_array
+
 
     def _augment_array(self, image):
         """
@@ -74,8 +104,8 @@ class Augmentation:
 
 # # Example and test
 # # set augmentation to flip upside down
-# seq = iaa.Sequential([
-#     iaa.Flipud(1)
+# seq = ia.Sequential([
+#     ia.Flipud(1)
 # ])
 #
 # aug = Augmentation(seq)
