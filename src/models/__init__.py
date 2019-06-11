@@ -29,7 +29,8 @@ class BaselineAutoencoder(nn.Module):
         self.encoder_layers = []
         for i in range(len(encoder_in_chanels)):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
-                                            kernel_size=encoder_kernel_sizes[i], stride=encoder_strides[i], padding=1))
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i], padding=1))
             if use_batchnorm:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             self.encoder_layers.append(internal_activation())
@@ -37,7 +38,8 @@ class BaselineAutoencoder(nn.Module):
         self.decoder_layers = []
         for i in range(len(decoder_in_chanels)):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
-                                            kernel_size=decoder_kernel_sizes[i], stride=decoder_strides[i], padding=1))
+                                                          kernel_size=decoder_kernel_sizes[i],
+                                                          stride=decoder_strides[i], padding=1))
             if use_batchnorm:
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             self.decoder_layers.append(internal_activation())
