@@ -1,13 +1,14 @@
-def mkdir_p(mypath):
-    """Creates a directory. equivalent to using mkdir -p on the command line"""
+from os.path import abspath, dirname
+import os
 
-    from errno import EEXIST
-    from os import makedirs, path
+ROOT_PATH = dirname(dirname(abspath(__file__)))
 
-    try:
-        makedirs(mypath)
-    except OSError as exc:  # Python >2.5
-        if exc.errno == EEXIST and path.isdir(mypath):
-            pass
-        else:
-            raise
+XR_HAND_PATH = f'{ROOT_PATH}/data/train/XR_HAND'
+XR_HAND_CROPPED_PATH = f'{ROOT_PATH}/data/train/XR_HAND_CROPPED'
+
+MODELS_DIR = f'{ROOT_PATH}/models'
+
+TMP_IMAGES_DIR = f'{ROOT_PATH}/models/tmp'
+os.makedirs(TMP_IMAGES_DIR, exist_ok=True)
+
+MLFLOW_TRACKING_URI = 'http://localhost:5001'

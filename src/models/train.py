@@ -2,60 +2,89 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 from tqdm import tqdm
-from torchsummary import summary
 import mlflow.pytorch
 
-import matplotlib.pyplot as plt
+from src.data import TrainValTestSplitter, MURASubset
+from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
+from src.models import BottleneckAutoencoder
+from src.models.torchsummary import summary
+from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
 
-from src.data import DataGenerator, TrainValTestSplitter
-from src.models import BaselineAutoencoder
-from src import mkdir_p
-
+# Ignoring numpy warnings and setting seeds
 np.seterr(divide='ignore', invalid='ignore')
-
-# Parameters
 torch.manual_seed(42)
-batch_size = 32
-image_resolution = (512, 512)
-num_epochs = 1000
-hist_equalisation = True
+
+# General Setup
+model_class = BottleneckAutoencoder
+device = "cuda" if torch.cuda.is_available() else "cpu"
+num_workers = 6
+
+# Mlflow settings
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment(model_class.__name__)
+
+# Mlflow parameters
+run_params = {
+    'batch_size': 64,
+    'image_resolution': (512, 512),
+    'num_epochs': 500,
+    'pipeline': {
+        'hist_equalisation': False,
+        'cropped': True,
+    }
+}
 
 # Initialization
-splitter = TrainValTestSplitter()
-train_generator = DataGenerator(filenames=splitter.data_train.path, batch_size=batch_size, dim=image_resolution,
-                                hist_equalisation=hist_equalisation)
-val_generator = DataGenerator(filenames=splitter.data_val.path, batch_size=batch_size, dim=image_resolution,
-                              true_labels=splitter.data_val.label, hist_equalisation=hist_equalisation)
-test_generator = DataGenerator(filenames=splitter.data_test.path, batch_size=batch_size, dim=image_resolution,
-                               true_labels=splitter.data_test.label, hist_equalisation=hist_equalisation)
+data_path = XR_HAND_CROPPED_PATH if run_params['pipeline']['cropped'] else XR_HAND_PATH
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f'Available device: {device}')
-model = BaselineAutoencoder().to(device)
-# model = torch.load('../../models/baseline_autoencoder.pt')
+print(f'\nDATA SPLIT:')
+splitter = TrainValTestSplitter(path_to_data=data_path)
+
+composed_transforms = Compose([GrayScale(),
+                               Padding(),
+                               Resize(run_params['image_resolution']),
+                               HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                               MinMaxNormalization(),
+                               ToTensor()])
+
+train = MURASubset(filenames=splitter.data_train.path, patients=splitter.data_train.patient,
+                   transform=composed_transforms)
+validation = MURASubset(filenames=splitter.data_val.path, true_labels=splitter.data_val.label,
+                        patients=splitter.data_val.patient, transform=composed_transforms)
+test = MURASubset(filenames=splitter.data_test.path, true_labels=splitter.data_test.label,
+                  patients=splitter.data_test.patient, transform=composed_transforms)
+
+train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
+val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
+test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
+
+model = model_class().to(device)
+# model = torch.load(f'{MODELS_DIR}/{current_model.__name__}.pt')
 # model.eval().to(device)
+print(f'\nMODEL ARCHITECTURE:')
+model_summary, trainable_params = summary(model, input_size=(1, *run_params['image_resolution']), device=device)
+run_params['trainable_params'] = trainable_params
 
+# Logging
+print(f'\nRUN PARAMETERS: {run_params}')
+for (param, value) in run_params.items():
+    mlflow.log_param(param, value)
+
+# Training
 inner_loss = nn.MSELoss()
 outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-print(summary(model, input_size=(train_generator.n_channels, *train_generator.dim), device='cuda'))
-mkdir_p('tmp')  # For saving intermediate pictures
 
-# Logging
-mlflow.set_experiment('Baseline autoencoder')
-mlflow.log_param("batch_size", batch_size)
-mlflow.log_param("image_resolution", image_resolution)
-mlflow.log_param("num_epochs", num_epochs)
-mlflow.log_param("hist_equalization", hist_equalisation)
+for epoch in range(run_params['num_epochs']):
 
-# Training
-for epoch in range(num_epochs):
+    print('===========Epoch [{}/{}]============'.format(epoch + 1, run_params['num_epochs']))
 
-    print('===========Epoch [{}/{}]============'.format(epoch + 1, num_epochs))
-
-    for batch in tqdm(range(len(train_generator)), desc='Training'):
-        inp = Variable(torch.from_numpy(train_generator[batch]).float()).to(device)
+    # for batch_data in tqdm(train_loader, desc='Training'):
+    for batch_data in tqdm(train_loader, desc='Training', total=len(train_loader)):
+        inp = Variable(batch_data['image']).to(device)
 
         # forward pass
         output = model(inp)
@@ -69,30 +98,18 @@ for epoch in range(num_epochs):
     # log
     print(f'Loss on last train batch: {loss.data}')
 
-    # shuffle
-    train_generator.on_epoch_end()
-
-    # forward pass for the last train image
-    with torch.no_grad():
-        inp_image = train_generator[-1][-1:]
-        inp = torch.from_numpy(inp_image).float().to(device)
-        output = model(inp)
-        output_img = output.to('cpu').numpy()[0][0]
-
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-        ax[0].imshow(inp_image[0][0], cmap='gray', vmin=0, vmax=1)
-        ax[1].imshow(output_img, cmap='gray', vmin=0, vmax=1)
-        plt.savefig(f'tmp/epoch{epoch}.png')
-        plt.close(fig)
-
     # validation
-    opt_threshold = model.evaluate(val_generator, 'validation', outer_loss, device)
+    val_metrics = model.evaluate(val_loader, 'validation', outer_loss, device)
+
+    # forward pass for the random validation image
+    index = np.random.randint(0, len(validation), 1)[0]
+    model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_generator, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=opt_threshold)
+model.evaluate(test_loader, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=val_metrics['optimal mse threshold'])
 
 # Saving
-mlflow.pytorch.log_model(model, 'baseline_autoencoder')
-torch.save(model, '../../models/baseline_autoencoder.pt')
+mlflow.pytorch.log_model(model, 'current_model.__name__')
+torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')
