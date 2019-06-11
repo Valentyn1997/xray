@@ -7,6 +7,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import mlflow.pytorch
 import imgaug.augmenters as iaa
+from pprint import pprint
 
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
@@ -41,8 +42,7 @@ run_params = {
     'pipeline': {
         'hist_equalisation': False,
         'cropped': True,
-    },
-    'augmentation': True
+    }
 }
 
 # Data source
@@ -56,7 +56,7 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                                                  order=[0, 1])),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    ])
-print(augmentation_seq)
+run_params['augmentation'] = augmentation_seq.get_all_children()
 
 
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
@@ -99,7 +99,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 # -------------------------------- Logging ------------------------------------
 # Logging
-print(f'\nRUN PARAMETERS: {run_params}')
+print('\nRUN PARAMETERS:')
+pprint(run_params, width=-1)
 
 if log_to_mlflow:
     for (param, value) in run_params.items():
@@ -107,6 +108,7 @@ if log_to_mlflow:
 
 
 # -------------------------------- Training and evaluation -----------------------------------
+val_metrics = None
 for epoch in range(run_params['num_epochs']):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, run_params['num_epochs']))
