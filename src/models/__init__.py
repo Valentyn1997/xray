@@ -7,49 +7,46 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src import TMP_IMAGES_DIR
+from typing import List
 
 
 class BaselineAutoencoder(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 encoder_in_chanels: List[int] = (1, 16, 32, 32, 64, 64, 128, 128, 256, 256),
+                 encoder_out_chanels: List[int] = (16, 32, 32, 64, 64, 128, 128, 256, 256, 512),
+                 encoder_kernel_sizes: List[int] = (3, 4, 3, 4, 3, 4, 3, 4, 3, 4),
+                 encoder_strides: List[int] = (1, 2, 1, 2, 1, 2, 1, 2, 1, 2),
+                 decoder_in_chanels: List[int] = (512, 256, 128, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
+                 decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 3),
+                 decoder_strides: List[int] = (2, 2, 2, 2, 2, 1),
+                 use_batchnorm: bool = True,
+                 internal_activation=nn.ReLU,
+                 final_activation=nn.Tanh):
+
         super(BaselineAutoencoder, self).__init__()
 
-        self.encoder = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.ReLU()
-        )
+        self.encoder_layers = []
+        for i in range(len(encoder_in_chanels)):
+            self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i], padding=1))
+            if use_batchnorm:
+                self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
+            self.encoder_layers.append(internal_activation())
 
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(16, 1, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Tanh())
+        self.decoder_layers = []
+        for i in range(len(decoder_in_chanels)):
+            self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+                                                          kernel_size=decoder_kernel_sizes[i],
+                                                          stride=decoder_strides[i], padding=1))
+            if use_batchnorm:
+                self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
+            self.decoder_layers.append(internal_activation())
+        self.decoder_layers.append(final_activation())
+
+        self.encoder = nn.Sequential(*self.encoder_layers)
+        self.decoder = nn.Sequential(*self.decoder_layers)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -57,6 +54,7 @@ class BaselineAutoencoder(nn.Module):
         return x
 
     def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
+        self.eval()
         with torch.no_grad():
             inp = inp_image.to(device)
             output = self(inp)
@@ -70,6 +68,7 @@ class BaselineAutoencoder(nn.Module):
 
     def evaluate(self, loader, type, loss, device, log_to_mlflow=False, opt_threshold=None):
 
+        self.eval()
         with torch.no_grad():
             losses = []
             true_labels = []
@@ -115,77 +114,62 @@ class BaselineAutoencoder(nn.Module):
 
 
 class BottleneckAutoencoder(BaselineAutoencoder):
-    def __init__(self):
+    def __init__(self,
+                 encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
+                 encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 256),
+                 encoder_kernel_sizes: List[int] = (3, 4, 4, 4, 4, 1),
+                 encoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 decoder_in_chanels: List[int] = (256, 256, 128, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
+                 decoder_kernel_sizes: List[int] = (1, 4, 4, 4, 4, 3),
+                 decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 use_batchnorm: bool = True,
+                 internal_activation=nn.ReLU,
+                 final_activation=nn.Sigmoid):
+
         super(BottleneckAutoencoder, self).__init__()
 
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
-        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.conv4 = nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)
-        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.conv5 = nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1)
-        self.pool5 = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.conv6 = nn.Conv2d(256, 256, kernel_size=1, stride=1)
+        self.encoder_layers = []
+        for i in range(len(encoder_in_chanels)):
+            self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i], padding=1))
+            if i < len(decoder_in_chanels) - 1:
+                self.encoder_layers.append(nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True))
+            if use_batchnorm:
+                self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
+            self.encoder_layers.append(internal_activation())
 
-        self.trconv6 = nn.ConvTranspose2d(256, 256, kernel_size=1, stride=1)
-        self.unpool5 = nn.MaxUnpool2d(kernel_size=2, stride=2)
-        self.trconv5 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1)
-        self.unpool4 = nn.MaxUnpool2d(kernel_size=2, stride=2)
-        self.trconv4 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)
-        self.unpool3 = nn.MaxUnpool2d(kernel_size=2, stride=2)
-        self.trconv3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
-        self.unpool2 = nn.MaxUnpool2d(kernel_size=2, stride=2)
-        self.trconv2 = nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1)
-        self.unpool1 = nn.MaxUnpool2d(kernel_size=2, stride=2)
-        self.trconv1 = nn.ConvTranspose2d(16, 1, kernel_size=3, stride=1, padding=1)
+        self.decoder_layers = []
+        for i in range(len(decoder_in_chanels)):
+            self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+                                                          kernel_size=decoder_kernel_sizes[i], stride=decoder_strides[i],
+                                                          padding=1))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(nn.MaxUnpool2d(kernel_size=2, stride=2))
+            if use_batchnorm:
+                self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(internal_activation())
+            else:
+                self.decoder_layers.append(final_activation())
+
+        self.encoder = nn.Sequential(*self.encoder_layers)
+        self.decoder = nn.Sequential(*self.decoder_layers)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = nn.ReLU()(x)
-        x, ind1 = self.pool1(x)
+        maxpool_ind = []
+        for layer in self.encoder_layers:
+            if isinstance(layer, nn.MaxPool2d):
+                x, ind = layer(x)
+                maxpool_ind.append(ind)
+            else:
+                x = layer(x)
 
-        x = self.conv2(x)
-        x = nn.ReLU()(x)
-        x, ind2 = self.pool2(x)
-
-        x = self.conv3(x)
-        x = nn.ReLU()(x)
-        x, ind3 = self.pool3(x)
-        #
-        x = self.conv4(x)
-        x = nn.ReLU()(x)
-        x, ind4 = self.pool4(x)
-        #
-        x = self.conv5(x)
-        x = nn.ReLU()(x)
-        x, ind5 = self.pool5(x)
-
-        x = self.conv6(x)
-        x = nn.ReLU()(x)
-        x = self.trconv6(x)
-        x = nn.ReLU()(x)
-
-        x = self.unpool5(x, ind5)
-        x = self.trconv5(x)
-
-        x = self.unpool4(x, ind4)
-        x = nn.ReLU()(x)
-        x = self.trconv4(x)
-
-        x = self.unpool3(x, ind3)
-        x = nn.ReLU()(x)
-        x = self.trconv3(x)
-
-        x = self.unpool2(x, ind2)
-        x = nn.ReLU()(x)
-        x = self.trconv2(x)
-
-        x = self.unpool1(x, ind1)
-        x = nn.ReLU()(x)
-        x = self.trconv1(x)
-        x = nn.Sigmoid()(x)
-
+        for layer in self.decoder_layers:
+            if isinstance(layer, nn.MaxUnpool2d):
+                ind = maxpool_ind.pop(-1)
+                x = layer(x, ind)
+            else:
+                x = layer(x)
         return x
