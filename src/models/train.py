@@ -31,6 +31,7 @@ run_params = {
     'batch_size': 64,
     'image_resolution': (512, 512),
     'num_epochs': 500,
+    'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': False,
         'cropped': True,
@@ -61,7 +62,7 @@ train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=Tr
 val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 
-model = model_class().to(device)
+model = model_class(use_batchnorm=run_params['batch_normalisation']).to(device)
 # model = torch.load(f'{MODELS_DIR}/{current_model.__name__}.pt')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
@@ -82,8 +83,8 @@ for epoch in range(run_params['num_epochs']):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, run_params['num_epochs']))
 
-    # for batch_data in tqdm(train_loader, desc='Training'):
     for batch_data in tqdm(train_loader, desc='Training', total=len(train_loader)):
+        model.train()
         inp = Variable(batch_data['image']).to(device)
 
         # forward pass
@@ -99,7 +100,7 @@ for epoch in range(run_params['num_epochs']):
     print(f'Loss on last train batch: {loss.data}')
 
     # validation
-    val_metrics = model.evaluate(val_loader, 'validation', outer_loss, device)
+    val_metrics = model.evaluate(val_loader, 'validation', outer_loss, device, log_to_mlflow=True)
 
     # forward pass for the random validation image
     index = np.random.randint(0, len(validation), 1)[0]
