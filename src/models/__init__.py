@@ -30,7 +30,7 @@ class BaselineAutoencoder(nn.Module):
         for i in range(len(encoder_in_chanels)):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
                                                  kernel_size=encoder_kernel_sizes[i],
-                                                 stride=encoder_strides[i], padding=1))
+                                                 stride=encoder_strides[i], padding=1, bias=not use_batchnorm))
             if use_batchnorm:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             self.encoder_layers.append(internal_activation())
@@ -39,8 +39,8 @@ class BaselineAutoencoder(nn.Module):
         for i in range(len(decoder_in_chanels)):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
-                                                          stride=decoder_strides[i], padding=1))
-            if use_batchnorm:
+                                                          stride=decoder_strides[i], padding=1, bias=not use_batchnorm))
+            if use_batchnorm and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             self.decoder_layers.append(internal_activation())
         self.decoder_layers.append(final_activation())
@@ -133,8 +133,8 @@ class BottleneckAutoencoder(BaselineAutoencoder):
         for i in range(len(encoder_in_chanels)):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
                                                  kernel_size=encoder_kernel_sizes[i],
-                                                 stride=encoder_strides[i], padding=1))
-            if i < len(decoder_in_chanels) - 1:
+                                                 stride=encoder_strides[i], padding=1, bias=not use_batchnorm))
+            if i < len(encoder_in_chanels) - 1:
                 self.encoder_layers.append(nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True))
             if use_batchnorm:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
@@ -144,10 +144,10 @@ class BottleneckAutoencoder(BaselineAutoencoder):
         for i in range(len(decoder_in_chanels)):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i], stride=decoder_strides[i],
-                                                          padding=1))
+                                                          padding=1, bias=not use_batchnorm))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(nn.MaxUnpool2d(kernel_size=2, stride=2))
-            if use_batchnorm:
+            if use_batchnorm and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(internal_activation())
