@@ -4,6 +4,6 @@ args = sys.argv
 directory = args[1] 
 protoc_path = args[2] 
 for file in os.listdir(directory):
-     if file.endswith(".proto"):
-         print(protoc_path+" "+directory+"/"+file+" --python_out=.")
-         os.system(protoc_path+" "+directory+"/"+file+" --python_out=.")
+    if file.endswith(".proto"):
+        print(protoc_path+" "+directory+"/"+file+" --python_out=.")
+        os.system(protoc_path+" "+directory+"/"+file+" --python_out=.")
