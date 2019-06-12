@@ -104,8 +104,8 @@ class Augmentation(object):
 
 # # Example and test
 # # set augmentation to flip upside down
-# seq = ia.Sequential([
-#     ia.Flipud(1)
+# seq = iaa.Sequential([
+#     iaa.Flipud(1)
 # ])
 #
 # aug = Augmentation(seq)
