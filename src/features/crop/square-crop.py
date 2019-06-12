@@ -7,13 +7,15 @@ import sys
 from glob import glob
 from os.path import basename, dirname
 
+from src import XR_HAND_PATH, XR_HAND_CROPPED_PATH
+
 PY3 = sys.version_info[0] == 3
 
 if PY3:
     xrange = range
 
-out_path = "../../../../xray/data/train/XR_HAND_CROPPED"
-data_dir = "../../../../xray/data/train/XR_HAND"
+out_path = XR_HAND_CROPPED_PATH
+data_dir = XR_HAND_PATH
 SHOW = False
 
 
