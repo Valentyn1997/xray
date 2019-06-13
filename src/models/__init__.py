@@ -84,7 +84,7 @@ class BaselineAutoencoder(nn.Module):
                 true_labels.extend(batch_data['label'].numpy())
 
                 if qualitative_eval:
-                    filenames.extend(batch_data['filename'].numpy())
+                    filenames.extend(np.asarray(batch_data['filename']))
                     patient.extend(batch_data['patient'].numpy())
 
             losses = np.array(losses)
