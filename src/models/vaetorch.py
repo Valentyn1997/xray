@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from src.models import BaselineAutoencoder
 
 
 class Flatten(nn.Module):
@@ -10,13 +10,14 @@ class Flatten(nn.Module):
 
 
 class UnFlatten(nn.Module):
-    def forward(self, input, size=1024):
-        return input.view(input.size(0), size, 1, 1)
+    def forward(self, input, size=512):
+        return input.view(input.size(0), size, 14, 14)
 
 
-class VAE(nn.Module):
-    def __init__(self, image_channels=3, h_dim=1024, z_dim=32):
+class VAE(BaselineAutoencoder):
+    def __init__(self, device, image_channels=1, h_dim=100352, z_dim=32):
         super(VAE, self).__init__()
+        self.device = device
         self.encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
             nn.ReLU(),
@@ -25,6 +26,8 @@ class VAE(nn.Module):
             nn.Conv2d(64, 128, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.Conv2d(128, 256, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2),
             nn.ReLU(),
             Flatten()
         )
@@ -35,7 +38,7 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(h_dim, 128, kernel_size=5, stride=2),
+            nn.ConvTranspose2d(512, 128, kernel_size=5, stride=2),
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
             nn.ReLU(),
@@ -48,7 +51,7 @@ class VAE(nn.Module):
     def reparameterize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
         # return torch.normal(mu, std)
-        esp = torch.randn(*mu.size())
+        esp = torch.randn(*mu.size()).to(self.device)
         z = mu + std * esp
         return z
 
@@ -65,3 +68,16 @@ class VAE(nn.Module):
         z, mu, logvar = self.bottleneck(h)
         z = self.fc3(z)
         return self.decoder(z), mu, logvar
+
+    def train_on_batch(self):
+        pass
+
+    @staticmethod
+    def loss(recon_x, x, mu, logvar):
+        BCE = F.binary_cross_entropy(recon_x, x, size_average=False)
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
+        return BCE + KLD
+
+# TODO Feature matching difference
+# TODO Evaluation method

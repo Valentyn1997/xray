@@ -9,7 +9,7 @@ import mlflow.pytorch
 
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
-from src.models.vae-pytorch import VAE
+from src.models.vaetorch import VAE
 from src.models.torchsummary import summary
 from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
 
@@ -30,7 +30,7 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 64,
     'image_resolution': (512, 512),
-    'num_epochs': 500,
+    'num_epochs': 5,
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': False,
@@ -62,7 +62,7 @@ train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=Tr
 val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 
-model = model_class(use_batchnorm=run_params['batch_normalisation']).to(device)
+model = model_class(device=device).to(device)
 # model = torch.load(f'{MODELS_DIR}/{current_model.__name__}.pt')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
@@ -75,8 +75,6 @@ for (param, value) in run_params.items():
     mlflow.log_param(param, value)
 
 # Training
-inner_loss = nn.MSELoss()
-outer_loss = nn.MSELoss(reduction='none')
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(run_params['num_epochs']):
@@ -88,8 +86,10 @@ for epoch in range(run_params['num_epochs']):
         inp = Variable(batch_data['image']).to(device)
 
         # forward pass
-        output = model(inp)
-        loss = inner_loss(output, inp)
+        output, mu, logvar = model(inp)
+        print(output.size())
+        print(inp.size())
+        loss = VAE.loss(output, inp, mu, logvar)
 
         # backward
         optimizer.zero_grad()
@@ -100,7 +100,7 @@ for epoch in range(run_params['num_epochs']):
     print(f'Loss on last train batch: {loss.data}')
 
     # validation
-    val_metrics = model.evaluate(val_loader, 'validation', outer_loss, device, log_to_mlflow=True)
+    val_metrics = model.evaluate(val_loader, 'validation', loss, device, log_to_mlflow=True)
 
     # forward pass for the random validation image
     index = np.random.randint(0, len(validation), 1)[0]
@@ -109,7 +109,7 @@ for epoch in range(run_params['num_epochs']):
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_loader, 'test', outer_loss, device, log_to_mlflow=True, opt_threshold=val_metrics['optimal mse threshold'])
+model.evaluate(test_loader, 'test', loss.data, device, log_to_mlflow=True, opt_threshold=val_metrics['optimal mse threshold'])
 
 # Saving
 mlflow.pytorch.log_model(model, 'current_model.__name__')
