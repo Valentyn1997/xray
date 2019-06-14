@@ -87,8 +87,6 @@ for epoch in range(run_params['num_epochs']):
 
         # forward pass
         output, mu, logvar = model(inp)
-        print(output.size())
-        print(inp.size())
         loss = VAE.loss(output, inp, mu, logvar)
 
         # backward
@@ -100,11 +98,11 @@ for epoch in range(run_params['num_epochs']):
     print(f'Loss on last train batch: {loss.data}')
 
     # validation
-    val_metrics = model.evaluate(val_loader, 'validation', loss, device, log_to_mlflow=True)
+    val_metrics = model.evaluate(val_loader, 'validation', device, log_to_mlflow=True)
 
     # forward pass for the random validation image
     index = np.random.randint(0, len(validation), 1)[0]
-    model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
+    # model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
 
 print('=========Training ended==========')
 
