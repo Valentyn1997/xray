@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models import BaselineAutoencoder
+from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
+import numpy as np
+import mlflow
+from tqdm import tqdm
 
 
 class Flatten(nn.Module):
@@ -14,7 +17,7 @@ class UnFlatten(nn.Module):
         return input.view(input.size(0), size, 14, 14)
 
 
-class VAE(BaselineAutoencoder):
+class VAE(nn.Module):
     def __init__(self, device, image_channels=1, h_dim=100352, z_dim=32):
         super(VAE, self).__init__()
         self.device = device
@@ -38,11 +41,13 @@ class VAE(BaselineAutoencoder):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(512, 128, kernel_size=5, stride=2),
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.ConvTranspose2d(32, image_channels, kernel_size=6, stride=2),
             nn.Sigmoid(),
@@ -73,11 +78,64 @@ class VAE(BaselineAutoencoder):
         pass
 
     @staticmethod
-    def loss(recon_x, x, mu, logvar):
-        BCE = F.binary_cross_entropy(recon_x, x, size_average=False)
+    def loss(recon_x, x, mu, logvar, reduction='mean'):
+        BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
-        return BCE + KLD
+        if reduction == 'mean':
+            KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
+        elif reduction == 'none':
+            KLD = -0.5 * (1 + logvar - mu ** 2 - logvar.exp())
+        return KLD
+
+    @staticmethod
+    def bce_loss(recon_x, x):
+        return F.binary_cross_entropy(recon_x, x, size_average=False)
+
+    def evaluate(self, loader, type, device, log_to_mlflow=False, opt_threshold=None):
+
+        self.eval()
+        with torch.no_grad():
+            losses = []
+            true_labels = []
+            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+                inp = batch_data['image'].to(device)
+
+                # forward pass
+                output, mu, var = self(inp)
+                loss = self.loss(output, inp, mu, var, reduction='none')
+                losses.extend(loss.to('cpu').numpy().mean(axis=1))
+                true_labels.extend(batch_data['label'].numpy())
+
+            losses = np.array(losses)
+            true_labels = np.array(true_labels)
+
+            # ROC-AUC
+            roc_auc = roc_auc_score(true_labels, losses)
+            # MSE
+            mse = losses.mean()
+            # F1-score & optimal threshold
+            if opt_threshold is None:  # validation
+                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
+                f1_scores = (2 * precision * recall / (precision + recall))
+                f1 = np.nanmax(f1_scores)
+                opt_threshold = thresholds[np.argmax(f1_scores)]
+            else:  # testing
+                y_pred = (losses > opt_threshold).astype(int)
+                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
+
+            print(f'ROC-AUC on {type}: {roc_auc}')
+            print(f'MSE on {type}: {mse}')
+            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
+
+            metrics = {"roc-auc": roc_auc,
+                       "mse": mse,
+                       "f1-score": f1,
+                       "optimal mse threshold": opt_threshold}
+
+            if log_to_mlflow:
+                for (metric, value) in metrics.items():
+                    mlflow.log_metric(metric, value)
+
+            return metrics
 
 # TODO Feature matching difference
-# TODO Evaluation method
