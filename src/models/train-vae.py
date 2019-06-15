@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
@@ -30,10 +29,10 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 64,
     'image_resolution': (512, 512),
-    'num_epochs': 5,
+    'num_epochs': 100,
     'batch_normalisation': True,
     'pipeline': {
-        'hist_equalisation': False,
+        'hist_equalisation': True,
         'cropped': True,
     }
 }
@@ -45,9 +44,9 @@ print(f'\nDATA SPLIT:')
 splitter = TrainValTestSplitter(path_to_data=data_path)
 
 composed_transforms = Compose([GrayScale(),
+                               HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                Padding(),
                                Resize(run_params['image_resolution']),
-                               HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                MinMaxNormalization(),
                                ToTensor()])
 
@@ -76,7 +75,7 @@ for (param, value) in run_params.items():
 
 # Training
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
+val_metrics = None
 for epoch in range(run_params['num_epochs']):
 
     print('===========Epoch [{}/{}]============'.format(epoch + 1, run_params['num_epochs']))
@@ -102,12 +101,12 @@ for epoch in range(run_params['num_epochs']):
 
     # forward pass for the random validation image
     index = np.random.randint(0, len(validation), 1)[0]
-    # model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
+    model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_loader, 'test', loss.data, device, log_to_mlflow=True, opt_threshold=val_metrics['optimal mse threshold'])
+model.evaluate(test_loader, 'test', device, log_to_mlflow=True, opt_threshold=val_metrics['optimal mse threshold'])
 
 # Saving
 mlflow.pytorch.log_model(model, 'current_model.__name__')
