@@ -230,4 +230,3 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
-
