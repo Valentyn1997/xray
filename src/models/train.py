@@ -1,32 +1,30 @@
+from pprint import pprint
+
+import imgaug.augmenters as iaa
+import mlflow.pytorch
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from tqdm import tqdm
-import mlflow.pytorch
-import imgaug.augmenters as iaa
-from pprint import pprint
 
+from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
-from src.models import BottleneckAutoencoder
-from src.models.torchsummary import summary
-from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
+# from src.models import BottleneckAutoencoder, BaselineAutoencoder
+from src.models.gans import DCGAN
 from src.utils import query_yes_no
-
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # Ignoring numpy warnings and setting seeds
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
-model_class = BottleneckAutoencoder
+model_class = DCGAN
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
-num_workers = 6
+num_workers = 7
 log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 
 # Mlflow settings
@@ -35,14 +33,16 @@ mlflow.set_experiment(model_class.__name__)
 
 # Mlflow parameters
 run_params = {
-    'batch_size': 64,
+    'batch_size': 128,
     'image_resolution': (512, 512),
-    'num_epochs': 500,
+    'num_epochs': 1,
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': False,
         'cropped': True,
-    }
+    },
+    'masked_loss_on_val': True,
+    'masked_loss_on_train': True,
 }
 
 # Data source
@@ -50,24 +50,27 @@ data_path = XR_HAND_CROPPED_PATH if run_params['pipeline']['cropped'] else XR_HA
 
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
-                                   iaa.Flipud(0.5),  # vertically flip 50% of all images
+                                   iaa.Flipud(0.5),  # vertically flip 50% of all images,
                                    iaa.Sometimes(0.5, iaa.Affine(fit_output=True,  # not crop corners by rotation
-                                                                 rotate=(-45, 45),  # rotate by -45 to +45 degrees
+                                                                 rotate=(-20, 20),  # rotate by -45 to +45 degrees
                                                                  order=[0, 1])),
                                    # use nearest neighbour or bilinear interpolation (fast)
+                                   # iaa.Resize(),
+                                   # iaa.PadToFixedSize(512, 512, position='uniform')
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
 
 
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
-# Preprocessing pipeline
 composed_transforms = Compose([GrayScale(),
-                               Augmentation(augmentation_seq),
-                               Padding(max_shape=(750, 750)),  # max_shape - max size of image after augmentation
-                               Resize(run_params['image_resolution']),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                               Augmentation(augmentation_seq),
+                               Resize(run_params['image_resolution'], keep_aspect_ratio=True),
+                               Padding(max_shape=run_params['image_resolution']),
+                               # max_shape - max size of image after augmentation
                                MinMaxNormalization(),
                                ToTensor()])
+# Preprocessing pipeline
 
 # Dataset loaders
 print(f'\nDATA SPLIT:')
@@ -84,17 +87,15 @@ val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle
 test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 
 # Model initialization
-model = model_class(use_batchnorm=run_params['batch_normalisation']).to(device)
-# model = torch.load(f'{MODELS_DIR}/{current_model.__name__}.pt')
+model = model_class(device=device,
+                    use_batchnorm=run_params['batch_normalisation'],
+                    masked_loss_on_val=run_params['masked_loss_on_val'],
+                    masked_loss_on_train=run_params['masked_loss_on_train']).to(device)
+# model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
-model_summary, trainable_params = summary(model, input_size=(1, *run_params['image_resolution']), device=device)
+trainable_params = model.summary(device=device, image_resolution=run_params['image_resolution'])
 run_params['trainable_params'] = trainable_params
-
-# Losses
-inner_loss = nn.MSELoss()
-outer_loss = nn.MSELoss(reduction='none')
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 
 # -------------------------------- Logging ------------------------------------
@@ -109,40 +110,28 @@ if log_to_mlflow:
 
 # -------------------------------- Training and evaluation -----------------------------------
 val_metrics = None
-for epoch in range(run_params['num_epochs']):
+for epoch in range(1, run_params['num_epochs'] + 1):
 
-    print('===========Epoch [{}/{}]============'.format(epoch + 1, run_params['num_epochs']))
+    print('===========Epoch [{}/{}]============'.format(epoch, run_params['num_epochs']))
 
     for batch_data in tqdm(train_loader, desc='Training', total=len(train_loader)):
-        model.train()
-        inp = Variable(batch_data['image']).to(device)
-
-        # forward pass
-        output = model(inp)
-        loss = inner_loss(output, inp)
-
-        # backward
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        # model.forward_and_save_one_image(train[0]['image'].unsqueeze(0), train[0]['label'], epoch, device)
+        loss = model.train_on_batch(batch_data, device=device, epoch=epoch, num_epochs=run_params['num_epochs'])
 
     # log
     print(f'Loss on last train batch: {loss.data}')
 
     # validation
-    val_metrics = model.evaluate(val_loader, 'validation', outer_loss, device, log_to_mlflow=log_to_mlflow)
+    val_metrics = model.evaluate(val_loader, 'validation', device, log_to_mlflow=log_to_mlflow)
 
     # forward pass for the random validation image
     index = np.random.randint(0, len(validation), 1)[0]
-    model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
+    # model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_loader, 'test', outer_loss, device, log_to_mlflow=log_to_mlflow,
-               opt_threshold=val_metrics['optimal mse threshold'])
+model.evaluate(test_loader, 'test', device, log_to_mlflow=log_to_mlflow, val_metrics=val_metrics)
 
 # Saving
-mlflow.pytorch.log_model(model, 'current_model.__name__')
+mlflow.pytorch.log_model(model, f'{model_class.__name__}')
 torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')

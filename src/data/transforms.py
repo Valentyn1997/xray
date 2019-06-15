@@ -1,6 +1,6 @@
-import torch
 import cv2
 import numpy as np
+import torch
 
 
 class GrayScale(object):
@@ -40,15 +40,24 @@ class Padding(object):
 class Resize(object):
     """Resizes image"""
 
-    def __init__(self, out_dim):
+    def __init__(self, out_dim, keep_aspect_ratio=False):
         """
         Initialization
         :param out_dim: size of images in batch, all the images will be resized to fit
         """
         self.out_dim = out_dim
+        self.keep_aspect_ratio = keep_aspect_ratio
 
     def __call__(self, sample):
-        sample['image'] = cv2.resize(sample['image'], self.out_dim)
+        out_dim = self.out_dim
+        if self.keep_aspect_ratio:
+            if sample['image'].shape[0] >= sample['image'].shape[1]:
+                scale_factor = sample['image'].shape[1] / sample['image'].shape[0]
+                out_dim = (int(self.out_dim[0] * scale_factor), int(self.out_dim[1]))
+            else:
+                scale_factor = sample['image'].shape[0] / sample['image'].shape[1]
+                out_dim = (int(self.out_dim[0]), int(self.out_dim[1] * scale_factor))
+        sample['image'] = cv2.resize(sample['image'], out_dim)
         return sample
 
 
@@ -80,10 +89,14 @@ class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
+
         # add color axis
         image = np.empty((1, *sample['image'].shape))
         image[0, :, :] = sample['image']
         sample['image'] = torch.from_numpy(image).float()
+
+        # create pixel-wise masking
+        sample['mask'] = (sample['image'] != 0.0).float()
 
         sample['label'] = torch.tensor(sample['label']).int() if sample['label'] is not None else torch.Tensor()
         sample['patient'] = torch.tensor(int(sample['patient'])).int() if sample['patient'] is not None else torch.Tensor()

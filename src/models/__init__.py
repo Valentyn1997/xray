@@ -1,13 +1,29 @@
-import torch.nn as nn
-import torch
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
-import mlflow
-from tqdm import tqdm
-import numpy as np
+from typing import List
+
 import matplotlib.pyplot as plt
+import mlflow
+import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
+from torch.autograd import Variable
+from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR
-from typing import List
+from src.models.torchsummary import summary
+
+
+class MaskedMSE(nn.Module):
+    def __init__(self, reduction='mean'):
+        super(MaskedMSE, self).__init__()
+        self.reduction = reduction
+        self.criterion = nn.MSELoss(reduction='none')
+
+    def forward(self, input, target, mask):
+        loss = self.criterion(input * mask, target * mask)
+        if self.reduction == 'mean':
+            loss = torch.sum(loss) / torch.sum(mask)
+        return loss
 
 
 class BaselineAutoencoder(nn.Module):
@@ -22,7 +38,9 @@ class BaselineAutoencoder(nn.Module):
                  decoder_strides: List[int] = (2, 2, 2, 2, 2, 1),
                  use_batchnorm: bool = True,
                  internal_activation=nn.ReLU,
-                 final_activation=nn.Tanh):
+                 final_activation=nn.Tanh,
+                 masked_loss_on_val=False,
+                 masked_loss_on_train=False):
 
         super(BaselineAutoencoder, self).__init__()
 
@@ -48,6 +66,13 @@ class BaselineAutoencoder(nn.Module):
         self.encoder = nn.Sequential(*self.encoder_layers)
         self.decoder = nn.Sequential(*self.decoder_layers)
 
+        # Losses
+        self.masked_loss_on_val = masked_loss_on_val
+        self.masked_loss_on_train = masked_loss_on_train
+        self.inner_loss = MaskedMSE() if self.masked_loss_on_train else nn.MSELoss()
+        self.outer_loss = MaskedMSE(reduction='none') if self.masked_loss_on_val else nn.MSELoss(reduction='none')
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+
     def forward(self, x):
         x = self.encoder(x)
         x = self.decoder(x)
@@ -66,18 +91,24 @@ class BaselineAutoencoder(nn.Module):
             plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
             plt.close(fig)
 
-    def evaluate(self, loader, type, loss, device, log_to_mlflow=False, opt_threshold=None):
+    def evaluate(self, loader, type, device, log_to_mlflow=False, val_metrics=None):
 
+        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
         self.eval()
         with torch.no_grad():
             losses = []
             true_labels = []
             for batch_data in tqdm(loader, desc=type, total=len(loader)):
                 inp = batch_data['image'].to(device)
+                mask = batch_data['mask'].to(device)
 
                 # forward pass
                 output = self(inp)
-                losses.extend(loss(output, inp).to('cpu').numpy().mean(axis=(1, 2, 3)))
+                loss = self.outer_loss(output, inp, mask) if self.masked_loss_on_val else self.outer_loss(output, inp)
+
+                sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
+                sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
+                losses.extend(sum_loss / sum_mask)
                 true_labels.extend(batch_data['label'].numpy())
 
             losses = np.array(losses)
@@ -112,6 +143,31 @@ class BaselineAutoencoder(nn.Module):
 
             return metrics
 
+    def train_on_batch(self, batch_data, device, epoch, num_epochs):
+        self.train()
+        inp = Variable(batch_data['image']).to(device)
+        mask = batch_data['mask'].to(device)
+
+        # forward pass
+        output = self(inp)
+        loss = self.inner_loss(output, inp, mask) if self.masked_loss_on_train else self.inner_loss(output, inp)
+        # if epoch % 4 == 0:
+        #     loss = MaskedMSE()(output, inp, mask, mask)
+        # else:
+        #     loss = nn.MSELoss()(output, inp)
+
+        # backward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        # model.forward_and_save_one_image(train[0]['image'].unsqueeze(0), train[0]['label'], epoch, device)
+
+        return loss
+
+    def summary(self, device, image_resolution):
+        model_summary, trainable_params = summary(self, input_size=(1, *image_resolution), device=device)
+        return trainable_params
+
 
 class BottleneckAutoencoder(BaselineAutoencoder):
     def __init__(self,
@@ -125,9 +181,10 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
                  use_batchnorm: bool = True,
                  internal_activation=nn.ReLU,
-                 final_activation=nn.Sigmoid):
+                 final_activation=nn.Sigmoid,
+                 *args, **kwargs):
 
-        super(BottleneckAutoencoder, self).__init__()
+        super(BottleneckAutoencoder, self).__init__(*args, **kwargs)
 
         self.encoder_layers = []
         for i in range(len(encoder_in_chanels)):
@@ -173,3 +230,4 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
+

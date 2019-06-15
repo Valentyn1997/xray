@@ -1,7 +1,9 @@
-import numpy as np
 import imgaug as ia
-from skimage import img_as_ubyte
+import numpy as np
 from skimage import img_as_float
+from skimage import img_as_ubyte
+
+
 # import cv2
 # import matplotlib.pyplot as plt
 # from src.data import DataGenerator, TrainValTestSplitter
@@ -60,9 +62,9 @@ class Augmentation(object):
         inp_aug = self.seq.augment_image(inp_reshape)
         # Removing the chanel
         inp_aug_reshape = inp_aug[:, :, 0]
-        inp_aug_array = img_as_float(inp_aug_reshape)
+        # inp_aug_array = img_as_float(inp_aug_reshape)
 
-        return inp_aug_array
+        return inp_aug_reshape
 
     def _augment_array(self, image):
         """
