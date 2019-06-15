@@ -12,7 +12,7 @@ from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_P
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
-# from src.models import BottleneckAutoencoder, BaselineAutoencoder
+from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
 from src.models.gans import DCGAN
 from src.utils import query_yes_no
 
@@ -35,14 +35,17 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 128,
     'image_resolution': (512, 512),
-    'num_epochs': 1,
-    'batch_normalisation': True,
+    'num_epochs': 2000,
+    'batch_normalisation': False,
     'pipeline': {
         'hist_equalisation': False,
         'cropped': True,
     },
     'masked_loss_on_val': True,
     'masked_loss_on_train': True,
+    'soft_labels': True,
+    'glr': 0.001,
+    'dlr': 0.00005,
 }
 
 # Data source
@@ -51,9 +54,9 @@ data_path = XR_HAND_CROPPED_PATH if run_params['pipeline']['cropped'] else XR_HA
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
                                    iaa.Flipud(0.5),  # vertically flip 50% of all images,
-                                   iaa.Sometimes(0.5, iaa.Affine(fit_output=True,  # not crop corners by rotation
-                                                                 rotate=(-20, 20),  # rotate by -45 to +45 degrees
-                                                                 order=[0, 1])),
+                                   # iaa.Sometimes(0.5, iaa.Affine(fit_output=True,  # not crop corners by rotation
+                                   #                               rotate=(-20, 20),  # rotate by -45 to +45 degrees
+                                   #                               order=[0, 1])),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
                                    # iaa.PadToFixedSize(512, 512, position='uniform')
@@ -90,11 +93,14 @@ test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True
 model = model_class(device=device,
                     use_batchnorm=run_params['batch_normalisation'],
                     masked_loss_on_val=run_params['masked_loss_on_val'],
-                    masked_loss_on_train=run_params['masked_loss_on_train']).to(device)
+                    masked_loss_on_train=run_params['masked_loss_on_train'],
+                    soft_labels=run_params['soft_labels'],
+                    dlr=run_params['dlr'],
+                    glr=run_params['glr']).to(device)
 # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
-trainable_params = model.summary(device=device, image_resolution=run_params['image_resolution'])
+trainable_params = model.summary(image_resolution=run_params['image_resolution'])
 run_params['trainable_params'] = trainable_params
 
 
@@ -115,23 +121,28 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     print('===========Epoch [{}/{}]============'.format(epoch, run_params['num_epochs']))
 
     for batch_data in tqdm(train_loader, desc='Training', total=len(train_loader)):
-        loss = model.train_on_batch(batch_data, device=device, epoch=epoch, num_epochs=run_params['num_epochs'])
+        losses_dict = model.train_on_batch(batch_data, epoch=epoch, num_epochs=run_params['num_epochs'])
 
     # log
-    print(f'Loss on last train batch: {loss.data}')
+    print(f'Loss on last train batch: {losses_dict}')
 
     # validation
-    val_metrics = model.evaluate(val_loader, 'validation', device, log_to_mlflow=log_to_mlflow)
+    val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
-    # forward pass for the random validation image
-    index = np.random.randint(0, len(validation), 1)[0]
-    # model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch, device)
+    if model_class in [BottleneckAutoencoder, BaselineAutoencoder]:
+        # forward pass for the random validation image
+        index = np.random.randint(0, len(validation), 1)[0]
+        model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
+    elif model_class in [DCGAN] and epoch % 5 == 0:
+        # evaluate performance of generator
+        model.vizualize_generator(epoch)
 
 print('=========Training ended==========')
 
 # Test performance
-model.evaluate(test_loader, 'test', device, log_to_mlflow=log_to_mlflow, val_metrics=val_metrics)
+model.evaluate(test_loader, 'test', log_to_mlflow=log_to_mlflow, val_metrics=val_metrics)
 
 # Saving
-mlflow.pytorch.log_model(model, f'{model_class.__name__}')
+if log_to_mlflow:
+    model.save_to_mlflow()
 torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')
