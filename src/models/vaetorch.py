@@ -5,6 +5,8 @@ from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 import numpy as np
 import mlflow
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from src import TMP_IMAGES_DIR
 
 
 class Flatten(nn.Module):
@@ -80,7 +82,6 @@ class VAE(nn.Module):
     @staticmethod
     def loss(recon_x, x, mu, logvar, reduction='mean'):
         BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
-        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         if reduction == 'mean':
             KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
         elif reduction == 'none':
@@ -137,5 +138,18 @@ class VAE(nn.Module):
                     mlflow.log_metric(metric, value)
 
             return metrics
+
+    def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
+        self.eval()
+        with torch.no_grad():
+            inp = inp_image.to(device)
+            output, _, _ = self(inp)
+            output_img = output.to('cpu')
+
+            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
+            plt.close(fig)
 
 # TODO Feature matching difference
