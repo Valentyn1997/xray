@@ -81,7 +81,8 @@ class VAE(nn.Module):
 
     @staticmethod
     def loss(recon_x, x, mu, logvar, reduction='mean'):
-        BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
+        KLD = 0
+        # BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
         if reduction == 'mean':
             KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
         elif reduction == 'none':
