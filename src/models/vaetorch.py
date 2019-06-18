@@ -24,13 +24,13 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
         self.device = device
         self.encoder = nn.Sequential(
-            nn.Conv2d(image_channels, 9, kernel_size=4, stride=2),
+            nn.Conv2d(image_channels, 3, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(9, 24, kernel_size=4, stride=2),
+            nn.Conv2d(3, 9, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(24, 32, kernel_size=4, stride=2),
+            nn.Conv2d(9, 12, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(32, 36, kernel_size=4, stride=2),
+            nn.Conv2d(12, 24, kernel_size=4, stride=2),
             nn.ReLU(),
             # nn.Conv2d(256, 512, kernel_size=4, stride=2),
             # nn.ReLU(),
@@ -45,13 +45,13 @@ class VAE(nn.Module):
             UnFlatten(),
             # nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2),
             # nn.ReLU(),
-            nn.ConvTranspose2d(36, 32, kernel_size=4, stride=2),
+            nn.ConvTranspose2d(24, 12, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, 24, kernel_size=4, stride=2),
+            nn.ConvTranspose2d(12, 9, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(24, 9, kernel_size=4, stride=2),
+            nn.ConvTranspose2d(9, 3, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(9, image_channels, kernel_size=6, stride=2),
+            nn.ConvTranspose2d(3, image_channels, kernel_size=6, stride=2),
             nn.Sigmoid(),
         )
 

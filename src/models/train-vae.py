@@ -14,7 +14,7 @@ from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_P
 
 # Ignoring numpy warnings and setting seeds
 np.seterr(divide='ignore', invalid='ignore')
-torch.manual_seed(12345)
+torch.manual_seed(42)
 
 # General Setup
 model_class = VAE
