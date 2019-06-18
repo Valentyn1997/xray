@@ -66,12 +66,15 @@ class BaselineAutoencoder(nn.Module):
             plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
             plt.close(fig)
 
-    def evaluate(self, loader, type, loss, device, log_to_mlflow=False, opt_threshold=None):
+    def evaluate(self, loader, type, loss, device, log_to_mlflow=False,
+                 opt_threshold=None, qualitative_eval=False):
 
         self.eval()
         with torch.no_grad():
             losses = []
             true_labels = []
+            filenames = []
+            patient = []
             for batch_data in tqdm(loader, desc=type, total=len(loader)):
                 inp = batch_data['image'].to(device)
 
@@ -79,6 +82,10 @@ class BaselineAutoencoder(nn.Module):
                 output = self(inp)
                 losses.extend(loss(output, inp).to('cpu').numpy().mean(axis=(1, 2, 3)))
                 true_labels.extend(batch_data['label'].numpy())
+
+                if qualitative_eval:
+                    filenames.extend(np.asarray(batch_data['filename']))
+                    patient.extend(batch_data['patient'].numpy())
 
             losses = np.array(losses)
             true_labels = np.array(true_labels)
@@ -109,6 +116,13 @@ class BaselineAutoencoder(nn.Module):
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
                     mlflow.log_metric(metric, value)
+
+            if qualitative_eval:
+                metrics = {'loss': losses,
+                           'true_label': true_labels,
+                           'file_path': filenames,
+                           'patient': patient,
+                           "optimal mse threshold": opt_threshold}
 
             return metrics
 
