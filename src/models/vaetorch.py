@@ -15,25 +15,25 @@ class Flatten(nn.Module):
 
 
 class UnFlatten(nn.Module):
-    def forward(self, input, size=512):
-        return input.view(input.size(0), size, 14, 14)
+    def forward(self, input, size=36):
+        return input.view(input.size(0), size, 30, 30)
 
 
 class VAE(nn.Module):
-    def __init__(self, device, image_channels=1, h_dim=100352, z_dim=32):
+    def __init__(self, device, image_channels=1, h_dim=32400, z_dim=2):
         super(VAE, self).__init__()
         self.device = device
         self.encoder = nn.Sequential(
-            nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
+            nn.Conv2d(image_channels, 9, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.Conv2d(9, 24, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            nn.Conv2d(24, 32, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2),
+            nn.Conv2d(32, 36, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2),
-            nn.ReLU(),
+            # nn.Conv2d(256, 512, kernel_size=4, stride=2),
+            # nn.ReLU(),
             Flatten()
         )
 
@@ -43,51 +43,51 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2),
+            # nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2),
+            # nn.ReLU(),
+            nn.ConvTranspose2d(36, 32, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2),
+            nn.ConvTranspose2d(32, 24, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2),
+            nn.ConvTranspose2d(24, 9, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, image_channels, kernel_size=6, stride=2),
+            nn.ConvTranspose2d(9, image_channels, kernel_size=6, stride=2),
             nn.Sigmoid(),
         )
 
-    def reparameterize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
+    def reparameterize(self, mu, var):
+        std = var.mul(0.5).exp_()
         # return torch.normal(mu, std)
         esp = torch.randn(*mu.size()).to(self.device)
         z = mu + std * esp
         return z
 
     def bottleneck(self, h):
-        mu, logvar = self.fc1(h), self.fc2(h)
-        z = self.reparameterize(mu, logvar)
-        return z, mu, logvar
+        mu, var = self.fc1(h), self.fc2(h)
+        z = self.reparameterize(mu, var)
+        return z, mu, var
 
     def representation(self, x):
         return self.bottleneck(self.encoder(x))[0]
 
     def forward(self, x):
         h = self.encoder(x)
-        z, mu, logvar = self.bottleneck(h)
+        z, mu, var = self.bottleneck(h)
         z = self.fc3(z)
-        return self.decoder(z), mu, logvar
+        return self.decoder(z), mu, var
 
     def train_on_batch(self):
         pass
 
     @staticmethod
-    def loss(recon_x, x, mu, logvar, reduction='mean'):
+    def loss(recon_x, x, mu, var, reduction='mean'):
         KLD = 0
-        # BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
+        BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
         if reduction == 'mean':
-            KLD = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp())
+            KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
         elif reduction == 'none':
-            KLD = -0.5 * (1 + logvar - mu ** 2 - logvar.exp())
-        return KLD
+            KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
+        return BCE + KLD
 
     @staticmethod
     def bce_loss(recon_x, x):
