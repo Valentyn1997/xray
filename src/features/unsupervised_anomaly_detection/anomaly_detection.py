@@ -11,13 +11,13 @@ import os
 import sys
 from matplotlib import pyplot as plt
 import cv2
-
-# This is needed since the notebook is stored in the object_detection folder.
-sys.path.append("..")
 from sklearn import decomposition
+from sklearn.cluster import DBSCAN
 # from scipy.signal import find_peaks_cwt
 # from sklearn.cluster import SpectralClustering
-from sklearn.cluster import DBSCAN
+
+
+sys.path.append("..")
 
 POSITIVE_IMAGE_PATHS = []
 NEGATIVE_IMAGE_PATHS = []
@@ -34,20 +34,14 @@ for r, d, f in os.walk('showcase_sample/negative/'):
         if '.png' in file:
             NEGATIVE_IMAGE_PATHS.append(os.path.join(r, file))
 
-
-temp=r'/home/hitansh/TensorFlow/workspace/Screenshot 2019-06-16 at 11.05.14 AM.png'
-
 # grayscale
 img = cv2.imread(NEGATIVE_IMAGE_PATHS[24], 0)
-# img=cv2.imread(temp,0)
+# img = cv2.imread(temp,0)
 vmax = max(img.max(), -img.min())
 # vmax will give maximum value of the color in the image
 print(img.shape)
 plt.figure(1)
 plt.imshow(img)
-
-
-
 
 n_components = 50
 estimator = decomposition.NMF(n_components = n_components, init = 'random', tol = 5e-3)    
@@ -57,37 +51,6 @@ H = estimator.components_
 new_img = np.dot(W,H)
 print(new_img.shape)
 plt.imshow(new_img)
-
-
-'''
-sc_h = SpectralClustering(4, n_init=10)
-sc_h.fit(H.transpose())
-
-sc_w = SpectralClustering(4, n_init=10)
-sc_w.fit(W)
-print('spectral clustering')
-#print(sc_h.labels_)
-#print(sc_w.labels_)
-
-hh=[]
-pos=-1
-for i in sc_h.labels_:
-    pos+=1
-    if i!=0:
-        hh.append(pos)
-
-        
-ww=[]
-pos=-1
-for i in sc_w.labels_:
-    pos+=1
-    if i!=0:
-        ww.append(pos)
-        
-pprint(hh)
-pprint(ww)
-'''
-
 
 plt.figure(2, figsize = (20,40))
 plt.imshow(H)
@@ -99,14 +62,6 @@ for i in range(h.shape[0]):
 
 # plt.figure(2)
 # plt.plot(y)
-
-'''
-y_arr=np.array(y)
-x_axis=np.arange(1,len(y))
-peaks=find_peaks_cwt(y_arr,x_axis)
-x=[y_arr[i] for i in peaks]
-plt.plot(peaks,x,'+')
-'''
 
 clustering = DBSCAN(eps = 3, min_samples = 2).fit(H.transpose())
 labels = clustering.labels_
@@ -131,14 +86,6 @@ for i in range(W.shape[0]):
 # plt.figure(2)
 # plt.plot(y)
 
-'''
-y_arr=np.array(y)
-x_axis=np.arange(1,len(y))
-peaks=find_peaks_cwt(y_arr,x_axis)
-x=[y_arr[i] for i in peaks]
-plt.plot(peaks,x,'+')
-'''
-
 clustering = DBSCAN(eps=3, min_samples=2).fit(W)
 labels = clustering.labels_
 # pprint(labels)
@@ -153,8 +100,6 @@ print(w_positions)
 w_x = [n_components-2 for i in range(len(w_positions))]
 plt.plot(w_positions, w_x, '+')
 
-
-
 x_values = []
 y_values = []
 for i in h_positions:
@@ -165,5 +110,5 @@ for i in h_positions:
 
 fig, (ax, ax2) = plt.subplots(ncols = 2)
 ax2.imshow(img, cmap = plt.cm.gray, interpolation = 'nearest', vmin = -vmax, vmax = vmax)
-ax.imshow(new_img, cmap=plt.cm.gray, interpolation='nearest', vmin =- vmax, vmax = vmax)
+ax.imshow(new_img, cmap=plt.cm.gray, interpolation = 'nearest', vmin = -vmax, vmax = vmax)
 plt.show()
