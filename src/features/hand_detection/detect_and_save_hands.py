@@ -119,7 +119,7 @@ SAVE_PATH = r'../../../train/XR_HAND_CENTRED_NEW'
 if not os.path.exists(os.path.exists(SAVE_PATH)):
     os.mkdir(SAVE_PATH)
 
-for image_path in TEST_IMAGE_PATHS[:30]:
+for image_path in TEST_IMAGE_PATHS:
     count += 1
     # print(count,end='\r')
     log.write(str(count) + ' ')
@@ -163,18 +163,18 @@ for image_path in TEST_IMAGE_PATHS[:30]:
                 pass
             # if it is not a label
             # will only come here if score>70% and not a label
-        else:
-            bool_anything_found = 1
-            j = j + 1
-            crop_img = image_np[int(top):int(bottom + top), int(left):int(left + right)]
-            # plt.figure(j,figsize=IMAGE_SIZE)
-            # plt.imshow(crop_img)
-            IMAGE_PATH_DIR = os.path.join(SAVE_PATH, image_path.split('/')[-3], image_path.split('/')[-2])
-            if not os.path.exists(IMAGE_PATH_DIR):
-                os.makedirs(IMAGE_PATH_DIR)
-            IMAGE_PATH_NEW = IMAGE_PATH_DIR + '/' + image_path.split('/')[-1][:-4] + r'_cropped_' + str(detection_number) + '.png'
-            cv2.imwrite(IMAGE_PATH_NEW, crop_img)
-            log.flush()
+            else:
+                bool_anything_found = 1
+                j = j + 1
+                crop_img = image_np[int(top):int(bottom + top), int(left):int(left + right)]
+                # plt.figure(j,figsize=IMAGE_SIZE)
+                # plt.imshow(crop_img)
+                IMAGE_PATH_DIR = os.path.join(SAVE_PATH, image_path.split('/')[-3], image_path.split('/')[-2])
+                if not os.path.exists(IMAGE_PATH_DIR):
+                    os.makedirs(IMAGE_PATH_DIR)
+                IMAGE_PATH_NEW = IMAGE_PATH_DIR + '/' + image_path.split('/')[-1][:-4] + r'_cropped_' + str(detection_number) + '.png'
+                cv2.imwrite(IMAGE_PATH_NEW, crop_img)
+                log.flush()
     if(not bool_anything_found):
         # print('Nothing found in this image')
         # save the image as it is
