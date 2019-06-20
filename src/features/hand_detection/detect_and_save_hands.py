@@ -90,23 +90,18 @@ def run_inference_for_single_image(image, graph):
             ops = tf.get_default_graph().get_operations()
             all_tensor_names = {output.name for op in ops for output in op.outputs}
             tensor_dict = {}
-            for key in [
-              'num_detections', 'detection_boxes', 'detection_scores',
-              'detection_classes']:
+            for key in ['num_detections', 'detection_boxes', 'detection_scores', 'detection_classes']:
                 tensor_name = key + ':0'
                 if tensor_name in all_tensor_names:
-                    tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
-                    tensor_name)
+                    tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(tensor_name)
             image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
 
             # Run inference
-            output_dict = sess.run(tensor_dict,
-                               feed_dict={image_tensor: image})
+            output_dict = sess.run(tensor_dict, feed_dict={image_tensor: image})
 
             # all outputs are float32 numpy arrays, so convert types as appropriate
             output_dict['num_detections'] = int(output_dict['num_detections'][0])
-            output_dict['detection_classes'] = output_dict[
-              'detection_classes'][0].astype(np.int64)
+            output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.int64)
             output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
             output_dict['detection_scores'] = output_dict['detection_scores'][0]
     return output_dict
@@ -114,7 +109,7 @@ def run_inference_for_single_image(image, graph):
 
 # Looping through all images
 log = open('../../../../../hand_detection_script_log.txt', 'w')
-#this file is one folder behind x_ray folder
+# this file is one folder behind x_ray folder
 
 j = 0
 count = 0
@@ -170,7 +165,7 @@ for image_path in TEST_IMAGE_PATHS[:30]:
             # will only come here if score>70% and not a label
         else:
             bool_anything_found = 1
-            j += 1
+            j = j + 1
             crop_img = image_np[int(top):int(bottom+top), int(left):int(left+right)]
             # plt.figure(j,figsize=IMAGE_SIZE)
             # plt.imshow(crop_img)
@@ -188,8 +183,8 @@ for image_path in TEST_IMAGE_PATHS[:30]:
             os.makedirs(IMAGE_PATH_DIR)
         IMAGE_PATH_NEW = IMAGE_PATH_DIR + '/' + image_path.split('/')[-1][:-4] + r'_undetected.png'
         cv2.imwrite(IMAGE_PATH_NEW, image_np)
-        #plt.figure(j,figsize=IMAGE_SIZE)
-        #plt.imshow(image_np)
+        # plt.figure(j,figsize=IMAGE_SIZE)
+        # plt.imshow(image_np)
         pass
 
 log.write('\nFertig.')
