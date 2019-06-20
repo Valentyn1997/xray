@@ -44,15 +44,15 @@ plt.figure(1)
 plt.imshow(img)
 
 n_components = 50
-estimator = decomposition.NMF(n_components = n_components, init = 'random', tol = 5e-3)    
+estimator = decomposition.NMF(n_components=n_components, init='random', tol=5e-3)
 W = estimator.fit_transform(img)
 H = estimator.components_
 
-new_img = np.dot(W,H)
+new_img = np.dot(W, H)
 print(new_img.shape)
 plt.imshow(new_img)
 
-plt.figure(2, figsize = (20,40))
+plt.figure(2, figsize=(20, 40))
 plt.imshow(H)
 
 h = H.transpose()
@@ -63,7 +63,7 @@ for i in range(h.shape[0]):
 # plt.figure(2)
 # plt.plot(y)
 
-clustering = DBSCAN(eps = 3, min_samples = 2).fit(H.transpose())
+clustering = DBSCAN(eps=3, min_samples=2).fit(H.transpose())
 labels = clustering.labels_
 # pprint(labels)
 
@@ -74,7 +74,7 @@ for i in labels:
     if i == -1:
         h_positions.append(pos)
 print(h_positions)
-h_x = [n_components-2 for i in range(len(h_positions))]
+h_x = [n_components - 2 for i in range(len(h_positions))]
 plt.plot(h_positions, h_x, '+')
 
 plt.figure(3, figsize=(20, 40))
@@ -91,13 +91,13 @@ labels = clustering.labels_
 # pprint(labels)
 
 pos = -1
-w_positions=[]
+w_positions = []
 for i in labels:
     pos = pos + 1
     if i == -1:
         w_positions.append(pos)
 print(w_positions)
-w_x = [n_components-2 for i in range(len(w_positions))]
+w_x = [n_components - 2 for i in range(len(w_positions))]
 plt.plot(w_positions, w_x, '+')
 
 x_values = []
@@ -108,7 +108,7 @@ for i in h_positions:
         img[j][i] = 255
         y_values.append(j)
 
-fig, (ax, ax2) = plt.subplots(ncols = 2)
-ax2.imshow(img, cmap = plt.cm.gray, interpolation = 'nearest', vmin = -vmax, vmax = vmax)
-ax.imshow(new_img, cmap=plt.cm.gray, interpolation = 'nearest', vmin = -vmax, vmax = vmax)
+fig, (ax, ax2) = plt.subplots(ncols=2)
+ax2.imshow(img, cmap=plt.cm.gray, interpolation='nearest', vmin=-vmax, vmax=vmax)
+ax.imshow(new_img, cmap=plt.cm.gray, interpolation='nearest', vmin=-vmax, vmax=vmax)
 plt.show()
