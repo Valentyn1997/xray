@@ -37,8 +37,8 @@ plt.imshow(img)
 mask = np.zeros(img.shape[:2], np.uint8)
 
 # bdgModel, fgdModel - These are arrays used by the algorithm internally. You just create two np.float64 type zero arrays of size (1,65).
-bgdModel = np.zeros((1,65), np.float64)
-fgdModel = np.zeros((1,65), np.float64)
+bgdModel = np.zeros((1, 65), np.float64)
+fgdModel = np.zeros((1, 65), np.float64)
 
 '''
 iterCount - Number of iterations the algorithm should run.
@@ -49,6 +49,6 @@ rect - It is the coordinates of a rectangle which includes the foreground object
 rect = (25, 25, 400, 290)
 cv.grabCut(img, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT)
 mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-img = img*mask2[:, :, np.newaxis]
+img = img * mask2[:, :, np.newaxis]
 plt.figure(2)
 plt.imshow(img), plt.colorbar(), plt.show()
