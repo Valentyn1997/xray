@@ -166,10 +166,10 @@ for image_path in TEST_IMAGE_PATHS[:30]:
         else:
             bool_anything_found = 1
             j = j + 1
-            crop_img = image_np[int(top):int(bottom+top), int(left):int(left+right)]
+            crop_img = image_np[int(top):int(bottom + top), int(left):int(left + right)]
             # plt.figure(j,figsize=IMAGE_SIZE)
             # plt.imshow(crop_img)
-            IMAGE_PATH_DIR = os.path.join(SAVE_PATH,image_path.split('/')[-3], image_path.split('/')[-2])
+            IMAGE_PATH_DIR = os.path.join(SAVE_PATH, image_path.split('/')[-3], image_path.split('/')[-2])
             if not os.path.exists(IMAGE_PATH_DIR):
                 os.makedirs(IMAGE_PATH_DIR)
             IMAGE_PATH_NEW = IMAGE_PATH_DIR + '/' + image_path.split('/')[-1][:-4] + r'_cropped_' + str(detection_number) + '.png'
