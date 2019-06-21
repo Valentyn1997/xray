@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
 from src.data import TrainValTestSplitter, MURASubset
-from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, MinMaxNormalization, ToTensor
+from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
 from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
 from src.models.gans import DCGAN
@@ -33,9 +33,9 @@ mlflow.set_experiment(model_class.__name__)
 
 # Mlflow parameters
 run_params = {
-    'batch_size': 128,
+    'batch_size': 32,
     'image_resolution': (512, 512),
-    'num_epochs': 2000,
+    'num_epochs': 1000,
     'batch_normalisation': False,
     'pipeline': {
         'hist_equalisation': False,
@@ -59,7 +59,7 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    #                               order=[0, 1])),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
-                                   # iaa.PadToFixedSize(512, 512, position='uniform')
+                                   iaa.PadToFixedSize(512, 512, position='uniform')
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
 
@@ -67,9 +67,9 @@ run_params['augmentation'] = augmentation_seq.get_all_children()
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
 composed_transforms = Compose([GrayScale(),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
-                               Augmentation(augmentation_seq),
                                Resize(run_params['image_resolution'], keep_aspect_ratio=True),
-                               Padding(max_shape=run_params['image_resolution']),
+                               Augmentation(augmentation_seq),
+                               # Padding(max_shape=run_params['image_resolution']),
                                # max_shape - max size of image after augmentation
                                MinMaxNormalization(),
                                ToTensor()])

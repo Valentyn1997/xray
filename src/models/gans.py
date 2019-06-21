@@ -59,11 +59,11 @@ class Self_Attn(nn.Module):
 
 
 class Generator(nn.Module):
-    d_z = 1024
+    d_z = 2048
 
     def __init__(self,
-                 decoder_in_chanels: List[int] = (d_z, 512, 256, 128, 64, 32, 16, 8),
-                 decoder_out_chanels: List[int] = (512, 256, 128, 64, 32, 16, 8, 1),
+                 decoder_in_chanels: List[int] = (d_z, 1024, 512, 256, 128, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (1024, 512, 256, 128, 64, 32, 16, 1),
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 2, 2, 2),
                  decoder_paddings: List[int] = (0, 1, 1, 1, 1, 1, 1, 1),
@@ -323,3 +323,4 @@ class DCGAN(nn.Module):
     def save_to_mlflow(self):
         mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
         mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
+
