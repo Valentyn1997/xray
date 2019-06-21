@@ -80,9 +80,6 @@ class VAE(nn.Module):
         z = self.fc3(z)
         return self.decoder(z), mu, var
 
-    def train_on_batch(self):
-        pass
-
     @staticmethod
     def loss(recon_x, x, mu, var, reduction='mean'):
         KLD = 0
@@ -156,5 +153,3 @@ class VAE(nn.Module):
             ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
             plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
             plt.close(fig)
-
-# TODO Feature matching difference
