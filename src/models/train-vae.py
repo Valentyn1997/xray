@@ -14,7 +14,7 @@ from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_P
 
 # Ignoring numpy warnings and setting seeds
 np.seterr(divide='ignore', invalid='ignore')
-torch.manual_seed(42)
+torch.manual_seed(12345)
 
 # General Setup
 model_class = VAE
@@ -29,7 +29,7 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 64,
     'image_resolution': (512, 512),
-    'num_epochs': 200,
+    'num_epochs': 100,
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': True,
