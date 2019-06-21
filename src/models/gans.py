@@ -323,4 +323,3 @@ class DCGAN(nn.Module):
     def save_to_mlflow(self):
         mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
         mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
-
