@@ -4,6 +4,8 @@ tf.enable_eager_execution()
 
 
 class CVAE(tf.keras.Model):
+    """ Variational Convolutional Autoencoder using keras library"""
+
     def __init__(self, latent_dim):
         super(CVAE, self).__init__()
         self.latent_dim = latent_dim

@@ -20,6 +20,8 @@ class UnFlatten(nn.Module):
 
 
 class VAE(nn.Module):
+    """ Variational Convolutional Autoencoder using torch library """
+
     def __init__(self, device, image_channels=1, h_dim=18432, z_dim=2):
         super(VAE, self).__init__()
         self.device = device
