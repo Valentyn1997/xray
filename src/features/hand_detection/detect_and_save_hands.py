@@ -35,6 +35,8 @@ See the [detection model zoo](https://github.com/tensorflow/models/blob/master/r
 for a list of other models that can be run out-of-the-box with varying speeds and accuracies.
 '''
 
+print('Have you already satisfied the protobuf requirement? Check Wiki.')
+
 os.chdir(r'../../../data/TensorFlow/workspace/training_demo/')
 # print('Changed to: ' + os.getcwd())
 
@@ -110,6 +112,9 @@ def run_inference_for_single_image(image, graph):
 # Looping through all images
 log = open('../../../../../hand_detection_script_log.txt', 'w')
 # this file is one folder behind x_ray folder
+
+print('Starting Script. Check log file at one directory behind your git folder.')
+log.write('Starting script.\n')
 
 j = 0
 count = 0
