@@ -245,7 +245,7 @@ class DCGAN(nn.Module):
         return {'generator loss': float(self.loss_G),
                 'discriminator loss': float(self.loss_D)}
 
-    def vizualize_generator(self, epoch, *args, **kwargs):
+    def visualize_generator(self, epoch, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         path = TMP_IMAGES_DIR
         # Evaluation mode
