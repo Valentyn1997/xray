@@ -88,8 +88,10 @@ class MURASubset(Dataset):
         image = cv2.imread(self.filenames[index])
         label = self.true_labels[index] if self.true_labels is not None else None
         patient = self.patients[index] if self.true_labels is not None else None
+        filenames = self.filenames[index]
 
-        sample = {'image': image, 'label': label, 'patient': patient}
+        sample = {'image': image, 'label': label, 'patient': patient,
+                  'filename': filenames}
 
         if self.transform:
             sample = self.transform(sample)
