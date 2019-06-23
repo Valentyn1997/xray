@@ -96,7 +96,6 @@ class BaselineAutoencoder(nn.Module):
         :param inp_image: Image for evaluation
         :param label: Label of image
         :param epoch: Epoch
-        :param device: Device ('cpu' or 'cuda')
         :param path: Path to save image to
         """
         # Evaluation mode
