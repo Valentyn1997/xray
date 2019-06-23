@@ -62,6 +62,11 @@ class VAE(nn.Module):
         )
 
     def reparameterize(self, mu, var):
+        """
+        Reparametrization of distribution parameters: mean and variance
+        :param mu: mean
+        :param var: variance
+        """
         std = var.mul(0.5).exp_()
         # return torch.normal(mu, std)
         esp = torch.randn(*mu.size()).to(self.device)
@@ -97,7 +102,15 @@ class VAE(nn.Module):
         return F.binary_cross_entropy(recon_x, x, size_average=False)
 
     def evaluate(self, loader, type, device, log_to_mlflow=False, opt_threshold=None):
-
+        """
+        Computes ROC-AUC, F1-score, MSE and optimal threshold for model
+        :param loader: data loader
+        :param type: test or validation evaluation
+        :param device: device type: CPU or CUDA GPU
+        :param log_to_mlflow: boolean variable to enable logging
+        :param opt_threshold: prespecified optimal threshold
+        :return: calculated metrics
+        """
         self.eval()
         with torch.no_grad():
             losses = []
@@ -144,6 +157,14 @@ class VAE(nn.Module):
             return metrics
 
     def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
+        """
+        Save random sample of original and reconstructed image
+        :param inp_image: input original image
+        :param label: label of image
+        :param epoch: number of epoch
+        :param device: device type: CPU or CUDA GPU
+        :param path: path to save
+        """
         self.eval()
         with torch.no_grad():
             inp = inp_image.to(device)
