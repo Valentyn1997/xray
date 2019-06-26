@@ -6,6 +6,8 @@ import numpy as np
 import mlflow
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from typing import List
+
 from src import TMP_IMAGES_DIR
 
 
@@ -22,44 +24,46 @@ class UnFlatten(nn.Module):
 class VAE(nn.Module):
     """ Variational Convolutional Autoencoder using torch library """
 
-    def __init__(self, device, image_channels=1, h_dim=18432, z_dim=2):
+    def __init__(self, device, h_dim=18432, z_dim=2,
+                 encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
+                 encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 512),
+                 encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4),
+                 encoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
+                 decoder_in_chanels: List[int] = (512, 256, 128, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
+                 decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 6),
+                 decoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
+                 internal_activation=nn.ReLU,
+                 final_activation=nn.Sigmoid
+                 ):
         super(VAE, self).__init__()
         self.device = device
-        self.encoder = nn.Sequential(
-            nn.Conv2d(image_channels, 16, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2),
-            nn.ReLU(),
-            Flatten()
-        )
 
+        # Encoder initialization
+        self.encoder_layers = []
+        for i in range(len(encoder_in_chanels)):
+            self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i]))
+            self.encoder_layers.append(internal_activation())
+        self.encoder_layers.append(Flatten())
+
+        # Decoder initialization
+        self.decoder_layers = []
+        self.decoder_layers.append(UnFlatten())
+        for i in range(len(decoder_in_chanels)):
+            self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+                                                          kernel_size=decoder_kernel_sizes[i],
+                                                          stride=decoder_strides[i]))
+            # if not i == len(decoder_in_chanels):
+            self.decoder_layers.append(internal_activation())
+        self.decoder_layers.append(final_activation())
+
+        self.encoder = nn.Sequential(*self.encoder_layers)
         self.fc1 = nn.Linear(h_dim, z_dim)
         self.fc2 = nn.Linear(h_dim, z_dim)
         self.fc3 = nn.Linear(z_dim, h_dim)
-
-        self.decoder = nn.Sequential(
-            UnFlatten(),
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(16, image_channels, kernel_size=6, stride=2),
-            nn.Sigmoid(),
-        )
+        self.decoder = nn.Sequential(*self.decoder_layers)
 
     def reparameterize(self, mu, var):
         """
@@ -105,7 +109,6 @@ class VAE(nn.Module):
         elif reduction == 'none':
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return BCE + KLD
-
 
     def evaluate(self, loader, type, device, log_to_mlflow=False, opt_threshold=None):
         """
@@ -159,7 +162,6 @@ class VAE(nn.Module):
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
                     mlflow.log_metric(metric, value)
-
             return metrics
 
     def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
