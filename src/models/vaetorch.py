@@ -89,6 +89,15 @@ class VAE(nn.Module):
 
     @staticmethod
     def loss(recon_x, x, mu, var, reduction='mean'):
+        """
+        Kullback Leibler divergence + Binary Cross Entropy combined loss
+        :param recon_x: reconstructed image
+        :param x: original image
+        :param mu: mean
+        :param var: variance
+        :param reduction: reduction type
+        :return: loss
+        """
         KLD = 0
         BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
         if reduction == 'mean':
@@ -97,9 +106,6 @@ class VAE(nn.Module):
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return BCE + KLD
 
-    @staticmethod
-    def bce_loss(recon_x, x):
-        return F.binary_cross_entropy(recon_x, x, size_average=False)
 
     def evaluate(self, loader, type, device, log_to_mlflow=False, opt_threshold=None):
         """

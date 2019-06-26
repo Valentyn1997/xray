@@ -11,6 +11,7 @@ from src.data.transforms import GrayScale, Padding, Resize, HistEqualisation, Mi
 from src.models.vaetorch import VAE
 from src.models.torchsummary import summary
 from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
+from src.utils import query_yes_no
 
 # Ignoring numpy warnings and setting seeds
 np.seterr(divide='ignore', invalid='ignore')
@@ -20,6 +21,7 @@ torch.manual_seed(12345)
 model_class = VAE
 device = "cuda" if torch.cuda.is_available() else "cpu"
 num_workers = 6
+log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 
 # Mlflow settings
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
