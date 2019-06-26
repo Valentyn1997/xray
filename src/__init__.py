@@ -5,6 +5,7 @@ ROOT_PATH = dirname(dirname(abspath(__file__)))
 
 XR_HAND_PATH = f'{ROOT_PATH}/data/train/XR_HAND'
 XR_HAND_CROPPED_PATH = f'{ROOT_PATH}/data/train/XR_HAND_CROPPED'
+XR_HAND_CENTRED_PATH = f'{ROOT_PATH}/data/train/XR_HAND_CENTRED'
 
 MODELS_DIR = f'{ROOT_PATH}/models'
 
