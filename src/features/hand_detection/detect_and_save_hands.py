@@ -86,6 +86,7 @@ for r, d, f in os.walk(PATH_TO_TEST_IMAGES_DIR):
             TEST_IMAGE_PATHS.append(os.path.join(r, file))
 total_files = len(TEST_IMAGE_PATHS)
 
+
 # This is a fucntion which detects the stuff (like hands etc and then returns a dictionary)
 def run_inference_for_single_image(image, graph):
     with graph.as_default():
