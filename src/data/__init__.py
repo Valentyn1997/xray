@@ -1,18 +1,16 @@
-import numpy as np
 import cv2
 import glob
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import re
 from sklearn.model_selection import GroupShuffleSplit
-from src import XR_HAND_PATH
-import matplotlib.pyplot as plt
-
 from torch.utils.data import Dataset
 
 
 class TrainValTestSplitter:
 
-    def __init__(self, path_to_data=XR_HAND_PATH, show_labels_dist=False):
+    def __init__(self, path_to_data, show_labels_dist=False):
         """
         Train-validation-test splitter, stores all the filenames
         :param path_to_data: for glob.glob to find all the images path
