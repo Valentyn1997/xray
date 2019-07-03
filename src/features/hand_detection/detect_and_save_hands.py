@@ -30,7 +30,7 @@ sys.path.append("..")
 '''
 ## Variables
 
-Any model exported using the `export_inference_graph.py` tool can be loaded here simply 
+Any model exported using the `export_inference_graph.py` tool can be loaded here simply
 by changing `PATH_TO_FROZEN_GRAPH` to point to a new .pb file.
 By default we use an "SSD with Mobilenet" model here.
 See the [detection model zoo]
@@ -45,7 +45,7 @@ os.chdir(r'../../../data/TensorFlow/workspace/training_demo/')
 
 # Path to frozen detection graph. This is the actual model that is used for the object detection.
 # PATH_TO_FROZEN_GRAPH = MODEL_NAME + '/frozen_inference_graph.pb'
-PATH_TO_FROZEN_GRAPH = 'trained-inference-graphs/output_inference_graph_v2.pb/frozen_inference_graph.pb'
+PATH_TO_FROZEN_GRAPH = 'trained-inference-graphs/output_inference_graph_v1.pb/frozen_inference_graph.pb'
 
 # List of the strings that is used to add correct label for each box.
 # PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
@@ -85,7 +85,6 @@ for r, d, f in os.walk(PATH_TO_TEST_IMAGES_DIR):
             # os.remove(os.path.join(r,file))
             TEST_IMAGE_PATHS.append(os.path.join(r, file))
 total_files = len(TEST_IMAGE_PATHS)
-
 
 # This is a fucntion which detects the stuff (like hands etc and then returns a dictionary)
 def run_inference_for_single_image(image, graph):
