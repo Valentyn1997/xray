@@ -1,19 +1,19 @@
-from pprint import pprint
-
 import imgaug.augmenters as iaa
 import mlflow.pytorch
 import numpy as np
 import torch
+from pprint import pprint
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
-from src import XR_HAND_CROPPED_PATH, MODELS_DIR, MLFLOW_TRACKING_URI, XR_HAND_PATH
+from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
 from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
 from src.models.gans import DCGAN
+from src.models.vaetorch import VAE
 from src.utils import query_yes_no
 
 # ---------------------------------------  Parameters setups ---------------------------------------
@@ -21,7 +21,7 @@ from src.utils import query_yes_no
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
-model_class = DCGAN
+model_class = BaselineAutoencoder
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
 num_workers = 7
@@ -35,21 +35,18 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 32,
     'image_resolution': (512, 512),
-    'num_epochs': 1000,
-    'batch_normalisation': False,
+    'num_epochs': 500,
+    'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': False,
-        'cropped': True,
+        'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
     'masked_loss_on_train': True,
     'soft_labels': True,
     'glr': 0.001,
-    'dlr': 0.00005,
+    'dlr': 0.00005
 }
-
-# Data source
-data_path = XR_HAND_CROPPED_PATH if run_params['pipeline']['cropped'] else XR_HAND_PATH
 
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
@@ -59,12 +56,13 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    #                               order=[0, 1])),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
-                                   iaa.PadToFixedSize(512, 512, position='uniform')
+                                   iaa.PadToFixedSize(512, 512, position='center')
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
 
 
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
+# Preprocessing pipeline
 composed_transforms = Compose([GrayScale(),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                Resize(run_params['image_resolution'], keep_aspect_ratio=True),
@@ -73,10 +71,11 @@ composed_transforms = Compose([GrayScale(),
                                # max_shape - max size of image after augmentation
                                MinMaxNormalization(),
                                ToTensor()])
-# Preprocessing pipeline
 
 # Dataset loaders
 print(f'\nDATA SPLIT:')
+data_path = f'{DATA_PATH}/{run_params["pipeline"]["data_source"]}'
+print(data_path)
 splitter = TrainValTestSplitter(path_to_data=data_path)
 train = MURASubset(filenames=splitter.data_train.path, patients=splitter.data_train.patient,
                    transform=composed_transforms, true_labels=np.zeros(len(splitter.data_train.path)))
@@ -91,7 +90,7 @@ test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True
 
 # Model initialization
 model = model_class(device=device,
-                    use_batchnorm=run_params['batch_normalisation'],
+                    batch_normalisation=run_params['batch_normalisation'],
                     masked_loss_on_val=run_params['masked_loss_on_val'],
                     masked_loss_on_train=run_params['masked_loss_on_train'],
                     soft_labels=run_params['soft_labels'],
@@ -102,6 +101,7 @@ model = model_class(device=device,
 print(f'\nMODEL ARCHITECTURE:')
 trainable_params = model.summary(image_resolution=run_params['image_resolution'])
 run_params['trainable_params'] = trainable_params
+run_params['other_hyperparams'] = model.hyper_parameters
 
 
 # -------------------------------- Logging ------------------------------------
@@ -129,7 +129,7 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
-    if model_class in [BottleneckAutoencoder, BaselineAutoencoder]:
+    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE]:
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)

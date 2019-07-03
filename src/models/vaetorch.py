@@ -1,14 +1,16 @@
+import matplotlib.pyplot as plt
+import mlflow
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
-import numpy as np
-import mlflow
+from torch.autograd import Variable
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 from typing import List
 
 from src import TMP_IMAGES_DIR
+from src.models.torchsummary import summary
 
 
 class Flatten(nn.Module):
@@ -24,7 +26,7 @@ class UnFlatten(nn.Module):
 class VAE(nn.Module):
     """ Variational Convolutional Autoencoder using torch library """
 
-    def __init__(self, device, h_dim=18432, z_dim=2,
+    def __init__(self, device, h_dim=18432, z_dim=1024,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
                  encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 512),
                  encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4),
@@ -34,10 +36,14 @@ class VAE(nn.Module):
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 6),
                  decoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
                  internal_activation=nn.ReLU,
-                 final_activation=nn.Sigmoid
-                 ):
+                 final_activation=nn.Sigmoid,
+                 lr=0.1e-3,
+                 *args, **kwargs):
         super(VAE, self).__init__()
+
         self.device = device
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
 
         # Encoder initialization
         self.encoder_layers = []
@@ -64,6 +70,9 @@ class VAE(nn.Module):
         self.fc2 = nn.Linear(h_dim, z_dim)
         self.fc3 = nn.Linear(z_dim, h_dim)
         self.decoder = nn.Sequential(*self.decoder_layers)
+
+        # Optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
     def reparameterize(self, mu, var):
         """
@@ -110,7 +119,7 @@ class VAE(nn.Module):
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return BCE + KLD
 
-    def evaluate(self, loader, type, device, log_to_mlflow=False, opt_threshold=None):
+    def evaluate(self, loader, type, log_to_mlflow=False, opt_threshold=None):
         """
         Computes ROC-AUC, F1-score, MSE and optimal threshold for model
         :param loader: data loader
@@ -125,7 +134,7 @@ class VAE(nn.Module):
             losses = []
             true_labels = []
             for batch_data in tqdm(loader, desc=type, total=len(loader)):
-                inp = batch_data['image'].to(device)
+                inp = batch_data['image'].to(self.device)
 
                 # forward pass
                 output, mu, var = self(inp)
@@ -164,7 +173,7 @@ class VAE(nn.Module):
                     mlflow.log_metric(metric, value)
             return metrics
 
-    def forward_and_save_one_image(self, inp_image, label, epoch, device, path=TMP_IMAGES_DIR):
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
         """
         Save random sample of original and reconstructed image
         :param inp_image: input original image
@@ -175,7 +184,7 @@ class VAE(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            inp = inp_image.to(device)
+            inp = inp_image.to(self.device)
             output, _, _ = self(inp)
             output_img = output.to('cpu')
 
@@ -184,3 +193,37 @@ class VAE(nn.Module):
             ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
             plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
             plt.close(fig)
+
+    def summary(self, image_resolution):
+        """
+        Print summary of model
+        :param image_resolution: input image resolution (H, W)
+        :return: number of trainable parameters
+        """
+        model_summary, trainable_params = summary(self, input_size=(1, *image_resolution), device=self.device)
+        return trainable_params
+
+    def train_on_batch(self, batch_data, *args, **kwargs):
+        """
+        Performs one step of gradient descent on batch_data
+        :param batch_data: Data of batch
+        :param args:
+        :param kwargs:
+        :return: Dict of losses
+        """
+        # Switching to train mode
+        self.train()
+
+        # Format input batch
+        inp = Variable(batch_data['image']).to(self.device)
+
+        # forward pass
+        output, mu, logvar = self(inp)
+        loss = VAE.loss(output, inp, mu, logvar)
+
+        # backward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {'bce + kld': float(loss.data)}
