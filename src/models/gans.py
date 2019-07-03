@@ -1,5 +1,3 @@
-from typing import List
-
 import mlflow
 import numpy as np
 import torch
@@ -8,6 +6,7 @@ import torchvision.utils as vutils
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from torch.distributions.uniform import Uniform
 from tqdm import tqdm
+from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
@@ -67,10 +66,12 @@ class Generator(nn.Module):
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 2, 2, 2),
                  decoder_paddings: List[int] = (0, 1, 1, 1, 1, 1, 1, 1),
-                 use_batchnorm=True,
+                 batch_normalisation=True,
                  internal_activation=nn.ReLU,
                  final_activation=nn.Sigmoid):
         super(Generator, self).__init__()
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
 
         # Decoder initialization
         self.decoder_layers = []
@@ -79,8 +80,8 @@ class Generator(nn.Module):
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i],
                                                           padding=decoder_paddings[i],
-                                                          bias=not use_batchnorm))
-            if use_batchnorm and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
+                                                          bias=not batch_normalisation))
+            if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(internal_activation())
@@ -102,10 +103,12 @@ class Discriminator(nn.Module):
                  encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4, 4),
                  encoder_strides: List[int] = (2, 2, 2, 2, 2, 2, 2, 1),
                  encoder_paddings: List[int] = (1, 1, 1, 1, 1, 1, 1, 0),
-                 use_batchnorm: bool = True,
+                 batch_normalisation: bool = True,
                  internal_activation=nn.ReLU,
                  final_activation=nn.Sigmoid):
         super(Discriminator, self).__init__()
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
 
         # Encoder initialization
         self.encoder_layers = []
@@ -114,8 +117,8 @@ class Discriminator(nn.Module):
                                                  kernel_size=encoder_kernel_sizes[i],
                                                  stride=encoder_strides[i],
                                                  padding=encoder_paddings[i],
-                                                 bias=not use_batchnorm))
-            if use_batchnorm:
+                                                 bias=not batch_normalisation))
+            if batch_normalisation:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             if i < len(encoder_in_chanels) - 1:
                 self.encoder_layers.append(internal_activation())
@@ -130,13 +133,20 @@ class Discriminator(nn.Module):
 
 class DCGAN(nn.Module):
 
-    def __init__(self, device, use_batchnorm=True, soft_labels=True, dlr=0.00005, glr=0.001, *args, **kwargs):
+    def __init__(self, device, batch_normalisation=True, soft_labels=True, dlr=0.00005, glr=0.001, *args, **kwargs):
         super(DCGAN, self).__init__()
+
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
         self.device = device
+
         self.soft_labels = soft_labels
         self.d_z = Generator.d_z
-        self.generator = Generator(use_batchnorm=use_batchnorm)
-        self.discriminator = Discriminator(use_batchnorm=use_batchnorm)
+        self.generator = Generator(batch_normalisation=batch_normalisation)
+        self.discriminator = Discriminator(batch_normalisation=batch_normalisation)
+        self.hyper_parameters['discriminator'] = self.discriminator.hyper_parameters
+        self.hyper_parameters['generator'] = self.generator.hyper_parameters
+
         weights_init(self.generator)
         weights_init(self.discriminator)
 

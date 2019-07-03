@@ -1,13 +1,11 @@
-from typing import List
-
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
-from torch.autograd import Variable
 from tqdm import tqdm
+from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
@@ -41,24 +39,27 @@ class BaselineAutoencoder(nn.Module):
                  decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 3),
                  decoder_strides: List[int] = (2, 2, 2, 2, 2, 1),
-                 use_batchnorm: bool = True,
+                 batch_normalisation: bool = True,
                  internal_activation=nn.ReLU,
                  final_activation=nn.Tanh,
                  masked_loss_on_val=False,
                  masked_loss_on_train=False,
+                 lr=0.001,
                  *args, **kwargs):
 
         super(BaselineAutoencoder, self).__init__()
 
         self.device = device
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
 
         # Encoder initialization
         self.encoder_layers = []
         for i in range(len(encoder_in_chanels)):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
                                                  kernel_size=encoder_kernel_sizes[i],
-                                                 stride=encoder_strides[i], padding=1, bias=not use_batchnorm))
-            if use_batchnorm:
+                                                 stride=encoder_strides[i], padding=1, bias=not batch_normalisation))
+            if batch_normalisation:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             self.encoder_layers.append(internal_activation())
 
@@ -67,8 +68,9 @@ class BaselineAutoencoder(nn.Module):
         for i in range(len(decoder_in_chanels)):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
-                                                          stride=decoder_strides[i], padding=1, bias=not use_batchnorm))
-            if use_batchnorm and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
+                                                          stride=decoder_strides[i], padding=1,
+                                                          bias=not batch_normalisation))
+            if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             self.decoder_layers.append(internal_activation())
         self.decoder_layers.append(final_activation())
@@ -83,7 +85,7 @@ class BaselineAutoencoder(nn.Module):
         self.outer_loss = MaskedMSELoss(reduction='none') if self.masked_loss_on_val else nn.MSELoss(reduction='none')
 
         # Optimizer
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -198,12 +200,12 @@ class BaselineAutoencoder(nn.Module):
         self.train()
 
         # Format input batch
-        inp = Variable(batch_data['image']).to(self.device)
+        inp = batch_data['image'].to(self.device)
         mask = batch_data['mask'].to(self.device)
 
         # Forward pass
         output = self(inp)
-        loss = self.inner_loss(output, inp, mask) if self.masked_loss_on_train else self.inner_loss(output, inp)
+        loss = self.inner_loss(inp, output, mask) if self.masked_loss_on_train else self.inner_loss(inp, output)
 
         # Backward pass
         self.optimizer.zero_grad()
@@ -235,22 +237,25 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                  decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
                  decoder_kernel_sizes: List[int] = (1, 4, 4, 4, 4, 3),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
-                 use_batchnorm: bool = True,
+                 batch_normalisation: bool = True,
                  internal_activation=nn.ReLU,
                  final_activation=nn.Sigmoid,
+                 lr=0.001,
                  *args, **kwargs):
 
         super(BottleneckAutoencoder, self).__init__(*args, **kwargs)
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
 
         # Encoder initialization
         self.encoder_layers = []
         for i in range(len(encoder_in_chanels)):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
                                                  kernel_size=encoder_kernel_sizes[i],
-                                                 stride=encoder_strides[i], padding=1, bias=not use_batchnorm))
+                                                 stride=encoder_strides[i], padding=1, bias=not batch_normalisation))
             if i < len(encoder_in_chanels) - 1:
                 self.encoder_layers.append(nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True))
-            if use_batchnorm:
+            if batch_normalisation:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             self.encoder_layers.append(internal_activation())
 
@@ -260,10 +265,10 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i],
-                                                          padding=1, bias=not use_batchnorm))
+                                                          padding=1, bias=not batch_normalisation))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(nn.MaxUnpool2d(kernel_size=2, stride=2))
-            if use_batchnorm and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
+            if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
                 self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(internal_activation())
@@ -274,6 +279,9 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             *self.encoder_layers)  # Not used in forward pass, but without it summary() doesn't work
         self.decoder = nn.Sequential(
             *self.decoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+
+        # Optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
     def forward(self, x):
         maxpool_ind = []
