@@ -26,7 +26,7 @@ class UnFlatten(nn.Module):
 class VAE(nn.Module):
     """ Variational Convolutional Autoencoder using torch library """
 
-    def __init__(self, device, h_dim=18432, z_dim=1024,
+    def __init__(self, device, h_dim=18432, z_dim=256,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
                  encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 512),
                  encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4),
@@ -61,8 +61,8 @@ class VAE(nn.Module):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i]))
-            # if not i == len(decoder_in_chanels):
-            self.decoder_layers.append(internal_activation())
+            if not i == len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(internal_activation())
         self.decoder_layers.append(final_activation())
 
         self.encoder = nn.Sequential(*self.encoder_layers)
