@@ -21,7 +21,7 @@ from src.utils import query_yes_no
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
-model_class = BaselineAutoencoder
+model_class = VAE
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
 num_workers = 7
@@ -35,7 +35,7 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 32,
     'image_resolution': (512, 512),
-    'num_epochs': 500,
+    'num_epochs': 200,
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': False,
@@ -45,7 +45,8 @@ run_params = {
     'masked_loss_on_train': True,
     'soft_labels': True,
     'glr': 0.001,
-    'dlr': 0.00005
+    'dlr': 0.00005,
+    'z_dim': 256,
 }
 
 # Augmentation
@@ -95,7 +96,8 @@ model = model_class(device=device,
                     masked_loss_on_train=run_params['masked_loss_on_train'],
                     soft_labels=run_params['soft_labels'],
                     dlr=run_params['dlr'],
-                    glr=run_params['glr']).to(device)
+                    glr=run_params['glr'],
+                    z_dim=run_params['z_dim']).to(device)
 # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
