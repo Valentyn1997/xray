@@ -11,7 +11,7 @@ from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
-from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
+from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, SkipConnection
 from src.models.gans import DCGAN
 from src.models.vaetorch import VAE
 from src.utils import query_yes_no
@@ -21,7 +21,7 @@ from src.utils import query_yes_no
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
-model_class = VAE
+model_class = SkipConnection
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
 num_workers = 7
@@ -38,7 +38,7 @@ run_params = {
     'num_epochs': 200,
     'batch_normalisation': True,
     'pipeline': {
-        'hist_equalisation': False,
+        'hist_equalisation': True,
         'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
