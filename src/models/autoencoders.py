@@ -343,7 +343,7 @@ class SkipConnection(BottleneckAutoencoder):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i],
-                                                          padding=1, bias=not use_batchnorm))
+                                                          padding=1, bias=not batch_normalisation))
             if i < len(decoder_in_chanels) - 1:
                 self.decoder_layers.append(internal_activation())
             if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
@@ -400,4 +400,3 @@ class SkipConnection(BottleneckAutoencoder):
                 x = layer(x)
 
         return x
-
