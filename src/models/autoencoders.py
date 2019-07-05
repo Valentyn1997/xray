@@ -10,6 +10,7 @@ from typing import List
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
 
+
 class MaskedMSELoss(nn.Module):
     def __init__(self, reduction='mean'):
         """
