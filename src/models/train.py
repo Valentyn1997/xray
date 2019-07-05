@@ -131,7 +131,7 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
-    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE]:
+    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE, SkipConnection]:
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
