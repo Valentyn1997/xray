@@ -79,13 +79,13 @@ composed_transforms = Compose([GrayScale(),
 
 
 composed_transforms_val = Compose([GrayScale(),
-                               HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
-                               Resize(run_params['image_resolution'], keep_aspect_ratio=True),
-                               Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
-                               # Padding(max_shape=run_params['image_resolution']),
-                               # max_shape - max size of image after augmentation
-                               MinMaxNormalization(),
-                               ToTensor()])
+                                   HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                                   Resize(run_params['image_resolution'], keep_aspect_ratio=True),
+                                   Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
+                                   # Padding(max_shape=run_params['image_resolution']),
+                                   # max_shape - max size of image after augmentation
+                                   MinMaxNormalization(),
+                                   ToTensor()])
 
 # Dataset loaders
 print(f'\nDATA SPLIT:')
