@@ -35,7 +35,7 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 32,
     'image_resolution': (512, 512),
-    'num_epochs': 200,
+    'num_epochs': 1000,
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': True,
@@ -46,15 +46,19 @@ run_params = {
     'soft_labels': True,
     'glr': 0.001,
     'dlr': 0.00005,
-    'z_dim': 256,
+    'z_dim': 1000,
+    'lr': 0.0001
 }
 
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
-                                   iaa.Flipud(0.5),  # vertically flip 50% of all images,
+                                   iaa.Flipud(0.1),  # vertically flip 50% of all images,
                                    # iaa.Sometimes(0.5, iaa.Affine(fit_output=True,  # not crop corners by rotation
                                    #                               rotate=(-20, 20),  # rotate by -45 to +45 degrees
                                    #                               order=[0, 1])),
+                                   #  iaa.Sometimes(0.5, iaa.Multiply((0.8, 1.2))),
+                                   #  iaa.Sometimes(0.5, iaa.Affine(scale={"x": (0.8, 1.2), "y": (0.8, 1.2)})),
+                                   #  iaa.Sometimes(0.5, iaa.Affine(rotate=(-20,20))),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
                                    iaa.PadToFixedSize(512, 512, position='center')
@@ -73,6 +77,16 @@ composed_transforms = Compose([GrayScale(),
                                MinMaxNormalization(),
                                ToTensor()])
 
+
+composed_transforms_val = Compose([GrayScale(),
+                               HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                               Resize(run_params['image_resolution'], keep_aspect_ratio=True),
+                               Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
+                               # Padding(max_shape=run_params['image_resolution']),
+                               # max_shape - max size of image after augmentation
+                               MinMaxNormalization(),
+                               ToTensor()])
+
 # Dataset loaders
 print(f'\nDATA SPLIT:')
 data_path = f'{DATA_PATH}/{run_params["pipeline"]["data_source"]}'
@@ -81,9 +95,9 @@ splitter = TrainValTestSplitter(path_to_data=data_path)
 train = MURASubset(filenames=splitter.data_train.path, patients=splitter.data_train.patient,
                    transform=composed_transforms, true_labels=np.zeros(len(splitter.data_train.path)))
 validation = MURASubset(filenames=splitter.data_val.path, true_labels=splitter.data_val.label,
-                        patients=splitter.data_val.patient, transform=composed_transforms)
+                        patients=splitter.data_val.patient, transform=composed_transforms_val)
 test = MURASubset(filenames=splitter.data_test.path, true_labels=splitter.data_test.label,
-                  patients=splitter.data_test.patient, transform=composed_transforms)
+                  patients=splitter.data_test.patient, transform=composed_transforms_val)
 
 train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
@@ -97,7 +111,8 @@ model = model_class(device=device,
                     soft_labels=run_params['soft_labels'],
                     dlr=run_params['dlr'],
                     glr=run_params['glr'],
-                    z_dim=run_params['z_dim']).to(device)
+                    z_dim=run_params['z_dim'],
+                    lr=run_params['lr']).to(device)
 # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
@@ -127,7 +142,8 @@ for epoch in range(1, run_params['num_epochs'] + 1):
 
     # log
     print(f'Loss on last train batch: {losses_dict}')
-
+    if log_to_mlflow:
+        mlflow.log_metric('train_loss', losses_dict['mse'])
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
@@ -145,6 +161,6 @@ print('=========Training ended==========')
 model.evaluate(test_loader, 'test', log_to_mlflow=log_to_mlflow, val_metrics=val_metrics)
 
 # Saving
+torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')
 if log_to_mlflow:
     model.save_to_mlflow()
-torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')
