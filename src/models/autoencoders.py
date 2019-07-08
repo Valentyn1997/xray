@@ -299,3 +299,76 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
+
+class Bottleneck(BaselineAutoencoder):
+    def __init__(self,
+                 encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
+                 encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 256),
+                 encoder_kernel_sizes: List[int] = (3, 4, 4, 4, 4, 1),
+                 encoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 decoder_in_chanels: List[int] = (256, 256, 128, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
+                 decoder_kernel_sizes: List[int] = (1, 4, 4, 4, 4, 3),
+                 decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 batch_normalisation: bool = True,
+                 internal_activation=nn.ReLU,
+                 final_activation=nn.Sigmoid,
+                 lr=0.001,
+                 *args, **kwargs):
+
+        super(Bottleneck, self).__init__(*args, **kwargs)
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
+
+        # Encoder initialization
+        self.encoder_layers = []
+        for i in range(len(encoder_in_chanels)):
+            self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i], padding=1, bias=not batch_normalisation))
+            if i < len(encoder_in_chanels) - 1:
+                self.encoder_layers.append(nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True))
+            self.encoder_layers.append(internal_activation())
+            if batch_normalisation:
+                self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
+
+        # Decoder initialization
+        self.decoder_layers = []
+        for i in range(len(decoder_in_chanels)):
+            self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+                                                          kernel_size=decoder_kernel_sizes[i],
+                                                          stride=decoder_strides[i],
+                                                          padding=1, bias=not batch_normalisation))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(nn.MaxUnpool2d(kernel_size=2, stride=2))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(internal_activation())
+            else:
+                self.decoder_layers.append(final_activation())
+            if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
+                self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
+
+        self.encoder = nn.ModuleList(
+            self.encoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+        self.decoder = nn.ModuleList(
+            self.decoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+
+        # Optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+    def forward(self, x):
+        maxpool_ind = []
+        for layer in self.encoder_layers:
+            if isinstance(layer, nn.MaxPool2d):
+                x, ind = layer(x)
+                maxpool_ind.append(ind)
+            else:
+                x = layer(x)
+
+        for layer in self.decoder_layers:
+            if isinstance(layer, nn.MaxUnpool2d):
+                ind = maxpool_ind.pop(-1)
+                x = layer(x, ind)
+            else:
+                x = layer(x)
+        return x
