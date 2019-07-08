@@ -26,7 +26,7 @@ class UnFlatten(nn.Module):
 class VAE(nn.Module):
     """ Variational Convolutional Autoencoder using torch library """
 
-    def __init__(self, device, h_dim=18432, z_dim=256,
+    def __init__(self, device, h_dim=18432, z_dim=512,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
                  encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 512),
                  encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4),
@@ -36,8 +36,9 @@ class VAE(nn.Module):
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 6),
                  decoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
                  internal_activation=nn.ReLU,
+                 batch_normalisation=True,
                  final_activation=nn.Sigmoid,
-                 lr=0.1e-3,
+                 lr=1e-5,
                  *args, **kwargs):
         super(VAE, self).__init__()
 
@@ -51,6 +52,8 @@ class VAE(nn.Module):
             self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
                                                  kernel_size=encoder_kernel_sizes[i],
                                                  stride=encoder_strides[i]))
+            if batch_normalisation:
+                self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
             self.encoder_layers.append(internal_activation())
         self.encoder_layers.append(Flatten())
 
@@ -62,6 +65,9 @@ class VAE(nn.Module):
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i]))
             if not i == len(decoder_in_chanels) - 1:
+                # no batch norm and no internal activation after last convolution
+                if batch_normalisation:
+                    self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
                 self.decoder_layers.append(internal_activation())
         self.decoder_layers.append(final_activation())
 
@@ -119,16 +125,20 @@ class VAE(nn.Module):
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return BCE + KLD
 
-    def evaluate(self, loader, type, log_to_mlflow=False, opt_threshold=None):
+    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
         """
         Computes ROC-AUC, F1-score, MSE and optimal threshold for model
         :param loader: data loader
         :param type: test or validation evaluation
         :param device: device type: CPU or CUDA GPU
         :param log_to_mlflow: boolean variable to enable logging
-        :param opt_threshold: prespecified optimal threshold
+        :param val_metrics: prespecified metrics, e.g optimal threshold
         :return: calculated metrics
         """
+
+        # Extracting optimal threshold
+        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
+
         self.eval()
         with torch.no_grad():
             losses = []

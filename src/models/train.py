@@ -35,10 +35,10 @@ mlflow.set_experiment(model_class.__name__)
 run_params = {
     'batch_size': 32,
     'image_resolution': (512, 512),
-    'num_epochs': 200,
+    'num_epochs': 300,
     'batch_normalisation': True,
     'pipeline': {
-        'hist_equalisation': False,
+        'hist_equalisation': True,
         'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
@@ -46,7 +46,7 @@ run_params = {
     'soft_labels': True,
     'glr': 0.001,
     'dlr': 0.00005,
-    'z_dim': 256,
+    'z_dim': 512,
 }
 
 # Augmentation
@@ -60,7 +60,6 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    iaa.PadToFixedSize(512, 512, position='center')
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
-
 
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
 # Preprocessing pipeline
@@ -105,7 +104,6 @@ trainable_params = model.summary(image_resolution=run_params['image_resolution']
 run_params['trainable_params'] = trainable_params
 run_params['other_hyperparams'] = model.hyper_parameters
 
-
 # -------------------------------- Logging ------------------------------------
 # Logging
 print('\nRUN PARAMETERS:')
@@ -114,7 +112,6 @@ pprint(run_params, width=-1)
 if log_to_mlflow:
     for (param, value) in run_params.items():
         mlflow.log_param(param, value)
-
 
 # -------------------------------- Training and evaluation -----------------------------------
 val_metrics = None
