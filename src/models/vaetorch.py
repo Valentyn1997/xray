@@ -10,7 +10,7 @@ from tqdm import tqdm
 from typing import List
 
 from src import TMP_IMAGES_DIR
-from src.models.torchsummary import summary
+from src.models.autoencoders import BaselineAutoencoder
 
 
 class Flatten(nn.Module):
@@ -204,14 +204,9 @@ class VAE(nn.Module):
             plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
             plt.close(fig)
 
-    def summary(self, image_resolution):
-        """
-        Print summary of model
-        :param image_resolution: input image resolution (H, W)
-        :return: number of trainable parameters
-        """
-        model_summary, trainable_params = summary(self, input_size=(1, *image_resolution), device=self.device)
-        return trainable_params
+    summary = BaselineAutoencoder.__dict__["summary"]
+
+    save_to_mlflow = BaselineAutoencoder.__dict__["save_to_mlflow"]
 
     def train_on_batch(self, batch_data, *args, **kwargs):
         """
