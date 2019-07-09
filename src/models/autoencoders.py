@@ -300,6 +300,7 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                 x = layer(x)
         return x
 
+
 class Bottleneck(BaselineAutoencoder):
     def __init__(self,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),

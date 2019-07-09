@@ -58,7 +58,7 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    #                               order=[0, 1])),
                                    # iaa.Sometimes(0.5, iaa.Multiply((0.8, 1.2))),
                                    iaa.Sometimes(0.5, iaa.Affine(scale={"x": (0.8, 1.2), "y": (0.8, 1.2)})),
-                                   iaa.Sometimes(0.5, iaa.Affine(rotate=(-5,5))),
+                                   # iaa.Sometimes(0.5, iaa.Affine(rotate=(-5, 5))),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
                                    iaa.PadToFixedSize(512, 512, position='center')
@@ -147,7 +147,7 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
-    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE, SkipConnection, Bottleneck]:
+    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE, Bottleneck]:
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
