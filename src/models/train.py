@@ -65,7 +65,6 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
 
-
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
 # Preprocessing pipeline
 composed_transforms = Compose([GrayScale(),
@@ -120,7 +119,6 @@ trainable_params = model.summary(image_resolution=run_params['image_resolution']
 run_params['trainable_params'] = trainable_params
 run_params['other_hyperparams'] = model.hyper_parameters
 
-
 # -------------------------------- Logging ------------------------------------
 # Logging
 print('\nRUN PARAMETERS:')
@@ -129,7 +127,6 @@ pprint(run_params, width=-1)
 if log_to_mlflow:
     for (param, value) in run_params.items():
         mlflow.log_param(param, value)
-
 
 # -------------------------------- Training and evaluation -----------------------------------
 val_metrics = None
