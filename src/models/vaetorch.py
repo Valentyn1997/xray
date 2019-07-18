@@ -125,6 +125,54 @@ class VAE(nn.Module):
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return BCE + KLD
 
+    @staticmethod
+    def lossMSE(recon_x, x, mu, var, reduction='mean'):
+        """
+        Kullback Leibler divergence + MSE combined loss
+        :param recon_x: reconstructed image
+        :param x: original image
+        :param mu: mean
+        :param var: variance
+        :param reduction: reduction type
+        :return: loss
+        """
+        KLD = 0
+        MSE = F.mse_loss(recon_x, x, size_average=False, reduction=reduction)
+        if reduction == 'mean':
+            KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
+        elif reduction == 'none':
+            KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
+        return MSE + KLD
+
+    @staticmethod
+    def loss_L_one(recon_x, x, mu, var, reduction='mean'):
+        """
+        Kullback Leibler divergence + Smooth L1 combined loss
+        :param recon_x: reconstructed image
+        :param x: original image
+        :param mu: mean
+        :param var: variance
+        :param reduction: reduction type
+        :return: loss
+        """
+        KLD = 0
+        L_one = F.smooth_l1_loss(recon_x, x, size_average=False, reduction=reduction)
+        if reduction == 'mean':
+            KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
+        elif reduction == 'none':
+            KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
+        return L_one + KLD
+
+    @staticmethod
+    def loss_pixel(recon_x, x):
+        """
+        Pixel-wise loss
+        :param recon_x: reconstructed image
+        :param x: original image
+        :return: loss
+        """
+        return recon_x - x
+
     def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
         """
         Computes ROC-AUC, F1-score, MSE and optimal threshold for model
