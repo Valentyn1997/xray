@@ -68,3 +68,89 @@ class PixelwiseLoss:
             # create dictionary with results
             out = {'loss': pixelwise_loss, 'label': true_labels, 'patient': patient, 'path': path}
             return out
+
+# Example:
+# import imgaug.augmenters as iaa
+# import mlflow.pytorch
+# import numpy as np
+# import torch
+# from pprint import pprint
+# from torch.utils.data import DataLoader
+# from torchvision.transforms import Compose
+# from tqdm import tqdm
+# import pandas as pd
+# import cv2
+# import torch.nn as nn
+# from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
+# from tqdm import tqdm
+# from typing import List
+#
+# import matplotlib.pyplot as plt
+#
+# from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
+# from src.data import TrainValTestSplitter, MURASubset
+# from src.data.transforms import *
+# from src.features.augmentation import Augmentation
+# from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
+# from src.models.gans import DCGAN
+# from src.models.vaetorch import VAE
+# from src.models import BaselineAutoencoder
+#
+# num_workers = 7
+# log_to_mlflow = False
+# device = "cuda"
+#
+# # Mlflow parameters
+# run_params = {
+#     'batch_size': 32,
+#     'image_resolution': (512, 512),
+#     'num_epochs': 1000,
+#     'batch_normalisation': True,
+#     'pipeline': {
+#         'hist_equalisation': True,
+#         'data_source': 'XR_HAND_CROPPED',
+#     },
+#     'masked_loss_on_val': True,
+#     'masked_loss_on_train': True,
+#     'soft_labels': True,
+#     'glr': 0.001,
+#     'dlr': 0.00005,
+#     'z_dim': 1000,
+#     'lr': 0.0001
+# }
+#
+#
+# # Preprocessing pipeline
+#
+# composed_transforms_val = Compose([GrayScale(),
+#                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+#                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
+#                                    Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
+#                                    # Padding(max_shape=run_params['image_resolution']),
+#                                    # max_shape - max size of image after augmentation
+#                                    MinMaxNormalization(),
+#                                    ToTensor()])
+#
+# # get data
+#
+# data_path = f'{DATA_PATH}/{run_params["pipeline"]["data_source"]}'
+# print(data_path)
+# splitter = TrainValTestSplitter(path_to_data=data_path)
+#
+# validation = MURASubset(filenames=splitter.data_val.path, true_labels=splitter.data_val.label,
+#                         patients=splitter.data_val.patient, transform=composed_transforms_val)
+#
+# val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
+#
+# # get model (change path to path to a trained model
+#
+# model = torch.load(path)
+#
+# # set loss function
+#
+# outer_loss = nn.MSELoss(reduction='none')
+# model.eval().to(device)
+#
+# evaluation = PixelwiseLoss(model=model, model_class='VAE',
+# device=device, loss_function=outer_loss, masked_loss_on_val=True)
+# loss_dict = evaluation.get_loss(data = val_loader)
