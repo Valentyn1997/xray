@@ -163,6 +163,16 @@ class VAE(nn.Module):
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
         return L_one + KLD
 
+    @staticmethod
+    def loss_pixel(recon_x, x):
+        """
+        Pixel-wise loss
+        :param recon_x: reconstructed image
+        :param x: original image
+        :return: loss
+        """
+        return recon_x - x
+
     def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
         """
         Computes ROC-AUC, F1-score, MSE and optimal threshold for model
