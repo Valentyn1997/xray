@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
-from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
+from src.data.transforms import *
 from src.features.augmentation import Augmentation
 from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, Bottleneck
 from src.models.gans import DCGAN
@@ -39,6 +39,8 @@ run_params = {
     'batch_normalisation': True,
     'pipeline': {
         'hist_equalisation': True,
+        'otsu_filter': True,
+        'adaptive_hist_equilization': True,
         'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
@@ -70,6 +72,9 @@ run_params['augmentation'] = augmentation_seq.get_all_children()
 # Preprocessing pipeline
 composed_transforms = Compose([GrayScale(),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                               OtsuFilter(active=run_params['pipeline']['otsu_filter']),
+                               AdaptiveHistogramEqualization(
+                                   active=run_params['pipeline']['adaptive_hist_equilization']),
                                Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                Augmentation(augmentation_seq),
                                # Padding(max_shape=run_params['image_resolution']),
@@ -80,6 +85,9 @@ composed_transforms = Compose([GrayScale(),
 
 composed_transforms_val = Compose([GrayScale(),
                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                                   OtsuFilter(active=run_params['pipeline']['otsu_filter']),
+                                   AdaptiveHistogramEqualization(
+                                       active=run_params['pipeline']['adaptive_hist_equilization']),
                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                    Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
                                    # Padding(max_shape=run_params['image_resolution']),
