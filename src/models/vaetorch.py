@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
@@ -7,7 +9,6 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from torch.autograd import Variable
 from tqdm import tqdm
-from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
@@ -61,8 +62,8 @@ class VAE(nn.Module):
             self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
                                                           kernel_size=decoder_kernel_sizes[i],
                                                           stride=decoder_strides[i]))
-            # if not i == len(decoder_in_chanels):
-            self.decoder_layers.append(internal_activation())
+            if not i == len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(internal_activation())
         self.decoder_layers.append(final_activation())
 
         self.encoder = nn.Sequential(*self.encoder_layers)
