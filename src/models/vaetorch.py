@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
@@ -7,7 +9,6 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from torch.autograd import Variable
 from tqdm import tqdm
-from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.autoencoders import BaselineAutoencoder
