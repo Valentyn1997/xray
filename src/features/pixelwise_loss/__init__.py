@@ -3,6 +3,8 @@ from tqdm import tqdm
 from src.data.transforms import *
 import matplotlib.pyplot as plt
 import numpy as np
+import random
+from scipy.ndimage.filters import gaussian_filter
 
 num_workers = 7
 log_to_mlflow = False
@@ -80,7 +82,7 @@ class PixelwiseLoss:
             out = {'loss': pixelwise_loss, 'label': true_labels, 'patient': patient, 'path': path}
             return out
 
-    def add_heatmap(self, inp_image, label, loss, path=TMP_IMAGES_DIR, save=True, display=True):
+    def add_heatmap(self, inp_image, label, loss, sigma=5, path=TMP_IMAGES_DIR, save=True, display=True):
         """
         Add heatmap layer on top of the image
         :param inp_image: imput image array
@@ -89,8 +91,10 @@ class PixelwiseLoss:
         :param path: path to save
         :param save: flag to save an image with heatmap
         """
+
+        loss = gaussian_filter(loss, sigma)
+
         mycmap = self._transparent_cmap(plt.cm.Reds)
-        loss = loss * 100
         inp_image = inp_image.numpy()
         w, h = inp_image.shape
         y, x = np.mgrid[0:h, 0:w]
@@ -98,11 +102,11 @@ class PixelwiseLoss:
         fig, ax = plt.subplots(1, 1)
         ax.imshow(inp_image, cmap='gray')
         ax.set_title(label)
-        cb = ax.contourf(x, y, loss, 50, cmap=mycmap)
-        plt.colorbar(cb)
+        cb = ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=0.002)
+        plt.colorbar(cb, boundaries=(0, 0.002))
 
         if save:
-            plt.savefig(f'{path}/_label{int(label)}_heatmap.png')
+            plt.savefig(f'{path}/{str(random.random())}_label{int(label)}_heatmap.png')
         if display:
             plt.show()
             plt.close(fig)
@@ -128,17 +132,19 @@ class PixelwiseLoss:
         :param path: path to save
         """
         # normalize heat map
-        max_value = np.max(heat_map)
-        min_value = np.min(heat_map)
-        normalized_heat_map = (heat_map - min_value) / (max_value - min_value)
+        # max_value = np.max(heat_map)
+        # min_value = np.min(heat_map)
+        # normalized_heat_map = (heat_map - min_value) / (max_value - min_value)
 
         # display
-        plt.imshow(inp_image, cmap='gray')
-        plt.imshow(255 * normalized_heat_map, alpha=alpha, cmap=cmap)
+        fig, ax = plt.subplots(1, 1)
+        ax.imshow(inp_image, cmap='gray')
+        ax.set_title(label)
+        ax.imshow(heat_map, alpha=alpha, cmap=cmap, vmin=0., vmax=0.005)
         plt.axis(axis)
-        print(label)
 
         if save:
-            plt.savefig(f'{path}/_label{int(label)}_heatmap.png')
+            plt.savefig(f'{path}/{str(random.random())}_label{int(label)}_heatmap.png')
         if display:
             plt.show()
+            plt.close(fig)
