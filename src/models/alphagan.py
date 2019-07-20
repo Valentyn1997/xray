@@ -224,7 +224,7 @@ class Discriminator(nn.Module):
         layer3 = []
         last = []
 
-        ## For inference x
+        # For inference x
         layer1.append(SpectralNorm(nn.Conv2d(1, conv_dim, 4, 2, 1)))
         layer1.append(nn.LeakyReLU(0.1))
 
@@ -267,7 +267,7 @@ class Discriminator(nn.Module):
             self.attn1 = Self_Attn(256, 'relu')
             self.attn2 = Self_Attn(512, 'relu')
 
-        ## For inference z
+        # For inference z
         self.infer_z = nn.Sequential(
             SpectralNorm(nn.Conv2d(z_dim, 512, 1)),
             nn.LeakyReLU(0.1),
@@ -275,7 +275,7 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.1),
         )
 
-        ## For inference joint x,z
+        # For inference joint x,z
         self.infer_joint = nn.Sequential(
             SpectralNorm(nn.Conv2d(1024 if self.imsize == 64 else 1536, 1024, 1)),
             nn.LeakyReLU(0.1),

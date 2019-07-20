@@ -304,6 +304,7 @@ class BottleneckAutoencoder(BaselineAutoencoder):
     def save_to_mlflow(self):
         mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
 
+
 class SkipConnection(BottleneckAutoencoder):
 
     def __init__(self,
