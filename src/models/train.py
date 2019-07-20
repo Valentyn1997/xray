@@ -1,8 +1,9 @@
+from pprint import pprint
+
 import imgaug.augmenters as iaa
 import mlflow.pytorch
 import numpy as np
 import torch
-from pprint import pprint
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from tqdm import tqdm
@@ -11,6 +12,7 @@ from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
+from src.models.alphagan import AlphaGan
 from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, SkipConnection
 from src.models.gans import DCGAN
 from src.models.vaetorch import VAE
@@ -21,10 +23,10 @@ from src.utils import query_yes_no
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
-model_class = SkipConnection
+model_class = AlphaGan
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
-num_workers = 7
+num_workers = 12
 log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 
 # Mlflow settings
@@ -34,25 +36,28 @@ mlflow.set_experiment(model_class.__name__)
 # Mlflow parameters
 run_params = {
     'batch_size': 32,
-    'image_resolution': (512, 512),
+    'image_resolution': (128, 128),
     'num_epochs': 1000,
     'batch_normalisation': True,
+    'spectral_normalisation': True,
     'pipeline': {
-        'hist_equalisation': True,
+        'hist_equalisation': False,
         'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
     'masked_loss_on_train': True,
     'soft_labels': True,
-    'glr': 0.001,
+    'glr': 0.01,
     'dlr': 0.00005,
-    'z_dim': 1000,
-    'lr': 0.0001
+    'z_dim': 100,
+    'lr': 0.0001,
+    'soft_delta': 0.05,
+    'adv_loss': 'inverse',
 }
 
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
-                                   iaa.Flipud(0.1),  # vertically flip 50% of all images,
+                                   iaa.Flipud(0.5),  # vertically flip 50% of all images,
                                    # iaa.Sometimes(0.5, iaa.Affine(fit_output=True,  # not crop corners by rotation
                                    #                               rotate=(-20, 20),  # rotate by -45 to +45 degrees
                                    #                               order=[0, 1])),
@@ -61,7 +66,7 @@ augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of 
                                    #  iaa.Sometimes(0.5, iaa.Affine(rotate=(-20,20))),
                                    # use nearest neighbour or bilinear interpolation (fast)
                                    # iaa.Resize(),
-                                   iaa.PadToFixedSize(512, 512, position='center')
+                                   iaa.PadToFixedSize(*run_params['image_resolution'], position='center')
                                    ])
 run_params['augmentation'] = augmentation_seq.get_all_children()
 
@@ -80,7 +85,8 @@ composed_transforms = Compose([GrayScale(),
 composed_transforms_val = Compose([GrayScale(),
                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
-                                   Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
+                                   Augmentation(iaa.Sequential(
+                                       [iaa.PadToFixedSize(*run_params['image_resolution'], position='center')])),
                                    # Padding(max_shape=run_params['image_resolution']),
                                    # max_shape - max size of image after augmentation
                                    MinMaxNormalization(),
@@ -104,14 +110,18 @@ test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True
 
 # Model initialization
 model = model_class(device=device,
+                    image_size=run_params['image_resolution'],
                     batch_normalisation=run_params['batch_normalisation'],
+                    spectral_normalisation=run_params['spectral_normalisation'],
                     masked_loss_on_val=run_params['masked_loss_on_val'],
                     masked_loss_on_train=run_params['masked_loss_on_train'],
                     soft_labels=run_params['soft_labels'],
                     dlr=run_params['dlr'],
                     glr=run_params['glr'],
                     z_dim=run_params['z_dim'],
-                    lr=run_params['lr']).to(device)
+                    lr=run_params['lr'],
+                    soft_delta=run_params['soft_delta'],
+                    adv_loss=run_params['adv_loss']).to(device)
 # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
@@ -140,7 +150,9 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     # log
     print(f'Loss on last train batch: {losses_dict}')
     if log_to_mlflow:
-        mlflow.log_metric('train_loss', losses_dict['mse'])
+        for loss in losses_dict:
+            mlflow.log_metric(f'train_{loss}', losses_dict[loss])
+
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
@@ -148,9 +160,9 @@ for epoch in range(1, run_params['num_epochs'] + 1):
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
-    elif model_class in [DCGAN] and epoch % 5 == 0:
+    elif model_class in [DCGAN, AlphaGan] and epoch % 3 == 0:
         # evaluate performance of generator
-        model.vizualize_generator(epoch)
+        model.visualize_generator(epoch)
 
 print('=========Training ended==========')
 
