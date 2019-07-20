@@ -1,5 +1,12 @@
-import torch
+from src import TMP_IMAGES_DIR
 from tqdm import tqdm
+from src.data.transforms import *
+import matplotlib.pyplot as plt
+import numpy as np
+
+num_workers = 7
+log_to_mlflow = False
+device = "cpu"
 
 
 class PixelwiseLoss:
@@ -54,10 +61,14 @@ class PixelwiseLoss:
                     loss = loss.cpu().numpy()
                 elif self.model_class == 'VAE':
                     # apply model on image
-                    output, mu, var = self(inp)
+                    output, mu, var = model(inp)
                     # calculate loss per pixel
-                    loss = self.loss_function(output, inp, mu, var, reduction='none')
-                    loss = loss.numpy()
+                    loss = model.loss(output, inp, mu, var, reduction='none')
+                    loss = loss.cpu().numpy()
+
+                print(loss.shape)
+                # get the first batch image and save heatmap
+                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0], loss[0][0, :, :])
 
                 # append values to list
                 pixelwise_loss.extend(loss)
@@ -69,88 +80,65 @@ class PixelwiseLoss:
             out = {'loss': pixelwise_loss, 'label': true_labels, 'patient': patient, 'path': path}
             return out
 
-# Example:
-# import imgaug.augmenters as iaa
-# import mlflow.pytorch
-# import numpy as np
-# import torch
-# from pprint import pprint
-# from torch.utils.data import DataLoader
-# from torchvision.transforms import Compose
-# from tqdm import tqdm
-# import pandas as pd
-# import cv2
-# import torch.nn as nn
-# from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
-# from tqdm import tqdm
-# from typing import List
-#
-# import matplotlib.pyplot as plt
-#
-# from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
-# from src.data import TrainValTestSplitter, MURASubset
-# from src.data.transforms import *
-# from src.features.augmentation import Augmentation
-# from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder
-# from src.models.gans import DCGAN
-# from src.models.vaetorch import VAE
-# from src.models import BaselineAutoencoder
-#
-# num_workers = 7
-# log_to_mlflow = False
-# device = "cuda"
-#
-# # Mlflow parameters
-# run_params = {
-#     'batch_size': 32,
-#     'image_resolution': (512, 512),
-#     'num_epochs': 1000,
-#     'batch_normalisation': True,
-#     'pipeline': {
-#         'hist_equalisation': True,
-#         'data_source': 'XR_HAND_CROPPED',
-#     },
-#     'masked_loss_on_val': True,
-#     'masked_loss_on_train': True,
-#     'soft_labels': True,
-#     'glr': 0.001,
-#     'dlr': 0.00005,
-#     'z_dim': 1000,
-#     'lr': 0.0001
-# }
-#
-#
-# # Preprocessing pipeline
-#
-# composed_transforms_val = Compose([GrayScale(),
-#                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
-#                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
-#                                    Augmentation(iaa.Sequential([iaa.PadToFixedSize(512, 512, position='center')])),
-#                                    # Padding(max_shape=run_params['image_resolution']),
-#                                    # max_shape - max size of image after augmentation
-#                                    MinMaxNormalization(),
-#                                    ToTensor()])
-#
-# # get data
-#
-# data_path = f'{DATA_PATH}/{run_params["pipeline"]["data_source"]}'
-# print(data_path)
-# splitter = TrainValTestSplitter(path_to_data=data_path)
-#
-# validation = MURASubset(filenames=splitter.data_val.path, true_labels=splitter.data_val.label,
-#                         patients=splitter.data_val.patient, transform=composed_transforms_val)
-#
-# val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
-#
-# # get model (change path to path to a trained model
-#
-# model = torch.load(path)
-#
-# # set loss function
-#
-# outer_loss = nn.MSELoss(reduction='none')
-# model.eval().to(device)
-#
-# evaluation = PixelwiseLoss(model=model, model_class='VAE',
-# device=device, loss_function=outer_loss, masked_loss_on_val=True)
-# loss_dict = evaluation.get_loss(data = val_loader)
+    def add_heatmap(self, inp_image, label, loss, path=TMP_IMAGES_DIR, save=True, display=True):
+        """
+        Add heatmap layer on top of the image
+        :param inp_image: imput image array
+        :param label: true label
+        :param loss: current loss from the model
+        :param path: path to save
+        :param save: flag to save an image with heatmap
+        """
+        mycmap = self._transparent_cmap(plt.cm.Reds)
+        loss = loss * 100
+        inp_image = inp_image.numpy()
+        w, h = inp_image.shape
+        y, x = np.mgrid[0:h, 0:w]
+        # Plot image and overlay colormap
+        fig, ax = plt.subplots(1, 1)
+        ax.imshow(inp_image, cmap='gray')
+        ax.set_title(label)
+        cb = ax.contourf(x, y, loss, 50, cmap=mycmap)
+        plt.colorbar(cb)
+
+        if save:
+            plt.savefig(f'{path}/_label{int(label)}_heatmap.png')
+        if display:
+            plt.show()
+            plt.close(fig)
+
+    def _transparent_cmap(self, cmap, N=255):
+        "Copy colormap and set alpha values"
+        mycmap = cmap
+        mycmap._init()
+        mycmap._lut[:, -1] = np.linspace(0, 0.8, N + 4)
+        return mycmap
+
+    def add_heatmap2(self, inp_image, label, heat_map, alpha=0.4, display=True, save=True, cmap='viridis', axis='on', path=TMP_IMAGES_DIR):
+        """
+        Add heatmap on top of the image, other way of visualising
+        :param inp_image: input image
+        :param label: true label
+        :param heat_map: current loss for image
+        :param alpha: radius
+        :param display: true/false flag to display
+        :param save: true/false flag to save
+        :param cmap: color map
+        :param axis: visualise axis
+        :param path: path to save
+        """
+        # normalize heat map
+        max_value = np.max(heat_map)
+        min_value = np.min(heat_map)
+        normalized_heat_map = (heat_map - min_value) / (max_value - min_value)
+
+        # display
+        plt.imshow(inp_image, cmap='gray')
+        plt.imshow(255 * normalized_heat_map, alpha=alpha, cmap=cmap)
+        plt.axis(axis)
+        print(label)
+
+        if save:
+            plt.savefig(f'{path}/_label{int(label)}_heatmap.png')
+        if display:
+            plt.show()
