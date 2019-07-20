@@ -35,7 +35,7 @@ mlflow.set_experiment(model_class.__name__)
 
 # Mlflow parameters
 run_params = {
-    'batch_size': 32,
+    'batch_size': 18,
     'image_resolution': (128, 128),
     'num_epochs': 1000,
     'batch_normalisation': True,
@@ -48,11 +48,11 @@ run_params = {
     'masked_loss_on_train': True,
     'soft_labels': True,
     'glr': 0.01,
-    'dlr': 0.00005,
-    'z_dim': 100,
+    'dlr': 0.005,
+    'z_dim': 200,
     'lr': 0.0001,
     'soft_delta': 0.05,
-    'adv_loss': 'inverse',
+    'adv_loss': 'hinge',
 }
 
 # Augmentation

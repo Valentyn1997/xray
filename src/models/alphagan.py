@@ -498,8 +498,11 @@ class AlphaGan(nn.Module):
         # Evaluation mode
         self.generator.eval()
         self.encoder.eval()
+        self.discriminator.eval()
         with torch.no_grad():
-            scores = []
+            scores_mse = []
+            scores_proba = []
+
             true_labels = []
             for batch_data in tqdm(loader, desc=type, total=len(loader)):
                 # Format input batch
@@ -515,6 +518,9 @@ class AlphaGan(nn.Module):
                 loss = self.outer_loss(reconstructed_img, inp, mask) if self.masked_loss_on_val \
                     else self.outer_loss(reconstructed_img, inp)
 
+                # Scores, based on output of discriminator - Higher score must correspond to positive labeled images
+                proba = self.discriminator(inp, real_z)[0].to('cpu').numpy().reshape(-1)
+
                 # Scores, based on MSE - higher MSE correspond to abnormal image
                 if self.masked_loss_on_val:
                     sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
@@ -523,33 +529,39 @@ class AlphaGan(nn.Module):
                 else:
                     score = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
 
-                scores.extend(score)
+                scores_mse.extend(score)
+                scores_proba.extend(proba)
                 true_labels.extend(batch_data['label'].numpy())
 
-            scores = np.array(scores)
+            scores_mse = np.array(scores_mse)
+            scores_proba = np.array(scores_proba)
             true_labels = np.array(true_labels)
 
             # ROC-AUC
-            roc_auc = roc_auc_score(true_labels, scores)
+            roc_auc_mse = roc_auc_score(true_labels, scores_mse)
+            roc_auc_proba = roc_auc_score(true_labels, scores_proba)
             # Mean discriminator proba on validation batch
-            mse = scores.mean()
+            mse = scores_mse.mean()
+            proba = scores_proba.mean()
             # F1-score & optimal threshold
             if opt_threshold is None:  # validation
-                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores)
+                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores_mse)
                 f1_scores = (2 * precision * recall / (precision + recall))
                 f1 = np.nanmax(f1_scores)
                 opt_threshold = thresholds[np.argmax(f1_scores)]
             else:  # testing
-                y_pred = (scores > opt_threshold).astype(int)
+                y_pred = (scores_mse > opt_threshold).astype(int)
                 f1 = f1_score(y_true=true_labels, y_pred=y_pred)
 
-            print(f'ROC-AUC on {type}: {roc_auc}')
+            print(f'ROC-AUC MSE on {type}: {roc_auc_mse}')
+            print(f'ROC-AUC discriminator proba on {type}: {roc_auc_proba}')
             print(f'MSE on {type}: {mse}')
             print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
 
             metrics = {"d_loss_train": float(self.d_loss),
                        "ge_loss_train": float(self.ge_loss),
-                       "roc-auc": roc_auc,
+                       "roc-auc_mse": roc_auc_mse,
+                       "roc-auc_proba": roc_auc_proba,
                        "mse": mse,
                        "f1-score": f1,
                        "optimal mse threshold": opt_threshold}
