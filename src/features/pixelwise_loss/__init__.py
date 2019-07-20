@@ -1,3 +1,4 @@
+from os.path import basename, dirname
 from src import TMP_IMAGES_DIR
 from tqdm import tqdm
 from src.data.transforms import *
@@ -69,8 +70,8 @@ class PixelwiseLoss:
                     loss = loss.cpu().numpy()
 
                 print(loss.shape)
-                # get the first batch image and save heatmap
-                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0], loss[0][0, :, :])
+                # get the first image from and save heatmap
+                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0], batch_data['patient'].numpy()[0], loss[0][0, :, :], batch_data['filename'][0])
 
                 # append values to list
                 pixelwise_loss.extend(loss)
@@ -82,12 +83,15 @@ class PixelwiseLoss:
             out = {'loss': pixelwise_loss, 'label': true_labels, 'patient': patient, 'path': path}
             return out
 
-    def add_heatmap(self, inp_image, label, loss, sigma=5, path=TMP_IMAGES_DIR, save=True, display=True):
+    def add_heatmap(self, inp_image, label, patient, loss, original_path, sigma=5, path=TMP_IMAGES_DIR, save=True, display=False):
         """
         Add heatmap layer on top of the image
         :param inp_image: imput image array
+        :param: current patient
         :param label: true label
         :param loss: current loss from the model
+        :param original_path: path of original image
+        :param sigma: gaussian blur parameter
         :param path: path to save
         :param save: flag to save an image with heatmap
         """
@@ -102,11 +106,13 @@ class PixelwiseLoss:
         fig, ax = plt.subplots(1, 1)
         ax.imshow(inp_image, cmap='gray')
         ax.set_title(label)
-        cb = ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=0.002)
-        plt.colorbar(cb, boundaries=(0, 0.002))
+        ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=0.002)
 
         if save:
-            plt.savefig(f'{path}/{str(random.random())}_label{int(label)}_heatmap.png')
+            image_name = basename(original_path)
+            study_name = basename(dirname(original_path))
+            name_to_save = f'{path}/heatmap_patient_{patient}_label{int(label)}_' + study_name + '_' + image_name
+            plt.savefig(name_to_save)
         if display:
             plt.show()
             plt.close(fig)
@@ -131,12 +137,6 @@ class PixelwiseLoss:
         :param axis: visualise axis
         :param path: path to save
         """
-        # normalize heat map
-        # max_value = np.max(heat_map)
-        # min_value = np.min(heat_map)
-        # normalized_heat_map = (heat_map - min_value) / (max_value - min_value)
-
-        # display
         fig, ax = plt.subplots(1, 1)
         ax.imshow(inp_image, cmap='gray')
         ax.set_title(label)
