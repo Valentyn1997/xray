@@ -4,7 +4,6 @@ from tqdm import tqdm
 from src.data.transforms import *
 import matplotlib.pyplot as plt
 import numpy as np
-import random
 from scipy.ndimage.filters import gaussian_filter
 
 num_workers = 7
@@ -66,12 +65,15 @@ class PixelwiseLoss:
                     # apply model on image
                     output, mu, var = model(inp)
                     # calculate loss per pixel
-                    loss = model.loss(output, inp, mu, var, reduction='none')
+                    loss = self.loss_function(output, inp)
                     loss = loss.cpu().numpy()
 
                 print(loss.shape)
                 # get the first image from and save heatmap
-                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0], batch_data['patient'].numpy()[0], loss[0][0, :, :], batch_data['filename'][0])
+                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0],
+                                 batch_data['patient'].numpy()[0],
+                                 loss[0][0, :, :],
+                                 batch_data['filename'][0])
 
                 # append values to list
                 pixelwise_loss.extend(loss)
@@ -123,28 +125,3 @@ class PixelwiseLoss:
         mycmap._init()
         mycmap._lut[:, -1] = np.linspace(0, 0.8, N + 4)
         return mycmap
-
-    def add_heatmap2(self, inp_image, label, heat_map, alpha=0.4, display=True, save=True, cmap='viridis', axis='on', path=TMP_IMAGES_DIR):
-        """
-        Add heatmap on top of the image, other way of visualising
-        :param inp_image: input image
-        :param label: true label
-        :param heat_map: current loss for image
-        :param alpha: radius
-        :param display: true/false flag to display
-        :param save: true/false flag to save
-        :param cmap: color map
-        :param axis: visualise axis
-        :param path: path to save
-        """
-        fig, ax = plt.subplots(1, 1)
-        ax.imshow(inp_image, cmap='gray')
-        ax.set_title(label)
-        ax.imshow(heat_map, alpha=alpha, cmap=cmap, vmin=0., vmax=0.005)
-        plt.axis(axis)
-
-        if save:
-            plt.savefig(f'{path}/{str(random.random())}_label{int(label)}_heatmap.png')
-        if display:
-            plt.show()
-            plt.close(fig)
