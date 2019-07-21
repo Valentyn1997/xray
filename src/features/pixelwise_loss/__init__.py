@@ -1,14 +1,10 @@
 from os.path import basename, dirname
 from src import TMP_IMAGES_DIR
 from tqdm import tqdm
-from src.data.transforms import *
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
-
-num_workers = 7
-log_to_mlflow = False
-device = "cpu"
 
 
 class PixelwiseLoss:
@@ -68,9 +64,8 @@ class PixelwiseLoss:
                     loss = self.loss_function(output, inp)
                     loss = loss.cpu().numpy()
 
-                print(loss.shape)
                 # get the first image from and save heatmap
-                self.add_heatmap(output[0].data[0, :, :], batch_data['label'].numpy()[0],
+                self.add_heatmap(inp[0].data[0, :, :], batch_data['label'].numpy()[0],
                                  batch_data['patient'].numpy()[0],
                                  loss[0][0, :, :],
                                  batch_data['filename'][0])
@@ -85,7 +80,8 @@ class PixelwiseLoss:
             out = {'loss': pixelwise_loss, 'label': true_labels, 'patient': patient, 'path': path}
             return out
 
-    def add_heatmap(self, inp_image, label, patient, loss, original_path, sigma=5, path=TMP_IMAGES_DIR, save=True, display=False):
+    def add_heatmap(self, inp_image, label, patient, loss, original_path, max_loss=0.002,
+                    sigma=5, path=TMP_IMAGES_DIR, save=True, display=False):
         """
         Add heatmap layer on top of the image
         :param inp_image: imput image array
@@ -93,6 +89,7 @@ class PixelwiseLoss:
         :param label: true label
         :param loss: current loss from the model
         :param original_path: path of original image
+        :param max_loss: max_loss for heatmap. Adjust this for different models
         :param sigma: gaussian blur parameter
         :param path: path to save
         :param save: flag to save an image with heatmap
@@ -108,7 +105,7 @@ class PixelwiseLoss:
         fig, ax = plt.subplots(1, 1)
         ax.imshow(inp_image, cmap='gray')
         ax.set_title(label)
-        ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=0.002)
+        ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=max_loss)
 
         if save:
             image_name = basename(original_path)

@@ -3,10 +3,11 @@ import imgaug.augmenters as iaa
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 import torch.nn as nn
+import torch
 from src.models.autoencoders import MaskedMSELoss
 from src import DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
-from src.data.transforms import *
+from src.data.transforms import GrayScale, HistEqualisation, Resize, MinMaxNormalization, ToTensor
 from src.features.augmentation import Augmentation
 
 num_workers = 7
@@ -61,7 +62,6 @@ val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle
 # model = torch.load("/home/ubuntu/mlruns/1/18d0f8aa21c44bca9c7414754b6f8552/artifacts/BaselineAutoencoder/data/model.pth", map_location=device)
 model = torch.load("/home/ubuntu/mlruns/1/5ca7f67c33674926a00590752c877fe5/artifacts/BaselineAutoencoder.pth", map_location=device)
 # model = torch.load("/home/ubuntu/mlruns/2/3766754ed32043bcbdc61d053615af6d/artifacts//BottleneckAutoencoder.pth", map_location=device)
-
 # model = torch.load("/home/diana/xray/mlruns/1/28737a0f69dd4016a055433176df6a87/artifacts/VAE/data/model.pth", map_location=device)
 
 # set loss function
