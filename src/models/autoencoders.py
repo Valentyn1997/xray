@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
@@ -5,7 +7,6 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from tqdm import tqdm
-from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
@@ -300,6 +301,113 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                 x = layer(x)
         return x
 
+    def save_to_mlflow(self):
+        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
+
+
+class SkipConnection(BottleneckAutoencoder):
+
+    def __init__(self,
+                 encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
+                 encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 256),
+                 encoder_kernel_sizes: List[int] = (3, 4, 4, 4, 4, 1),
+                 encoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 decoder_in_chanels: List[int] = (256, 512, 256, 64, 32, 16),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
+                 decoder_kernel_sizes: List[int] = (1, 4, 4, 4, 4, 3),
+                 decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
+                 batch_normalisation: bool = True,
+                 skip_connection_encoder: List[bool] = (False, False, False, True, True, False),
+                 skip_connection_decoder: List[bool] = (False, True, True, False, False, False),
+                 lr=0.001,
+                 internal_activation=nn.ReLU,
+                 final_activation=nn.Sigmoid,
+                 *args, **kwargs):
+
+        super(SkipConnection, self).__init__(*args, **kwargs)
+
+        self.hyper_parameters = locals()
+        self.hyper_parameters.pop('self')
+
+        # Encoder initialization
+        self.encoder_layers = []
+        for i in range(len(encoder_in_chanels)):
+            self.encoder_layers.append(nn.Conv2d(encoder_in_chanels[i], encoder_out_chanels[i],
+                                                 kernel_size=encoder_kernel_sizes[i],
+                                                 stride=encoder_strides[i], padding=1, bias=not batch_normalisation))
+            self.encoder_layers.append(internal_activation())
+            if batch_normalisation:
+                self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
+            if i < len(encoder_in_chanels) - 1:
+                self.encoder_layers.append(nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True))
+
+        # Decoder initialization
+        self.decoder_layers = []
+        for i in range(len(decoder_in_chanels)):
+            self.decoder_layers.append(nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+                                                          kernel_size=decoder_kernel_sizes[i],
+                                                          stride=decoder_strides[i],
+                                                          padding=1, bias=not batch_normalisation))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(internal_activation())
+            if batch_normalisation and i < len(decoder_in_chanels) - 1:  # no batch norm after last convolution
+                self.decoder_layers.append(nn.BatchNorm2d(decoder_out_chanels[i]))
+            if i < len(decoder_in_chanels) - 1:
+                self.decoder_layers.append(nn.MaxUnpool2d(kernel_size=2, stride=2))
+            else:
+                self.decoder_layers.append(final_activation())
+
+        self.skip_connection_encoder = skip_connection_encoder
+        self.skip_connection_decoder = skip_connection_decoder
+
+        self.encoder = nn.ModuleList(
+            self.encoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+        self.decoder = nn.ModuleList(
+            self.decoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+
+        # Optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+
+    def forward(self, x):
+        maxpool_ind = []
+        skip_connection_value = []
+        m = 0
+        n = 0
+        o = 0
+
+        for layer in self.encoder:
+            if isinstance(layer, nn.MaxPool2d):
+                x, ind = layer(x)
+                maxpool_ind.append(ind)
+            elif isinstance(layer, nn.ReLU):
+                x = layer(x)
+                if self.skip_connection_encoder[m]:
+                    skip_connection_value.append(x)
+                m = m + 1
+            else:
+                x = layer(x)
+
+        skip_connection_value.reverse()
+
+        for layer in self.decoder:
+
+            if isinstance(layer, nn.MaxUnpool2d):
+                ind = maxpool_ind.pop(-1)
+                x = layer(x, ind)
+            elif isinstance(layer, nn.ConvTranspose2d):
+                if self.skip_connection_decoder[o]:
+                    x = torch.cat((x, skip_connection_value[n]), dim=1)
+                    n = n + 1
+                x = layer(x)
+                o = o + 1
+            else:
+                x = layer(x)
+
+        return x
+
+    def save_to_mlflow(self):
+        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
+
 
 class Bottleneck(BaselineAutoencoder):
     def __init__(self,
@@ -373,3 +481,6 @@ class Bottleneck(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
+
+    def save_to_mlflow(self):
+        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')

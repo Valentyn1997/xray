@@ -134,7 +134,7 @@ class OtsuFilter(object):
             # add median filter for better performance
             img_median = cv2.medianBlur(img_equ, 19)
             # get threshold with otsu filter
-            th = cv2.threshold(img_median, 0, 255, (cv2.THRESH_BINARY+cv2.THRESH_OTSU))[1]
+            th = cv2.threshold(img_median, 0, 255, (cv2.THRESH_BINARY + cv2.THRESH_OTSU))[1]
             th[th > 0] = 1
             # apply filter on original image
             img = img * th
