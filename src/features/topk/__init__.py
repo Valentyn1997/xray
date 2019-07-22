@@ -1,16 +1,20 @@
 import torch
 from sklearn.metrics import roc_auc_score
+import plotly.figure_factory as ff
+import numpy as np
 
 
 class TopK:
     """calculate top k loss for an element of pixelwise losses"""
 
-    def __init__(self, loss):
+    def __init__(self, loss, reduce_to_mean):
         """
         initialize top k
         :param loss: list of pixelwise losses
+        :param reduce_to_mean: Bool, if true use mean otherwise sum up the top k loss
         """
         self.loss = loss
+        self.reduce_to_mean = reduce_to_mean
 
     def calculate_topk(self, loss, k):
         """
@@ -25,8 +29,12 @@ class TopK:
         flat_loss = loss.view(-1)
         # find the top k losses
         top_loss = torch.topk(flat_loss, k=k, dim=-1, largest=True, sorted=False)
-        # calculate mean out of top k losses
-        score = torch.mean(top_loss.values, dim=-1).item()
+        if self.reduce_to_mean:
+            # calculate mean out of top k losses
+            score = torch.mean(top_loss.values, dim=-1).item()
+        else:
+            # sum up the losses
+            score = torch.sum(top_loss.values)
         return score
 
     def get_topk(self, k):
@@ -62,6 +70,36 @@ class TopK:
 
         out = {'K': k_list, 'AUC': roc_auc_list}
         return out
+
+    def get_pixelwise_plot(self, scores, true_labels, bin_size):
+        """
+        plot scores vs true_labels
+        :param scores: losses
+        :param true_labels: true labels
+        :param bin_size: size
+        :return: plot loss vs true label
+        """
+
+        scores = scores
+        true_labels = true_labels
+
+        normal = np.asarray([scores[i] for i in range(len(true_labels)) if true_labels[i] == 0])
+        not_normal = np.asarray([scores[i] for i in range(len(true_labels)) if true_labels[i] == 1])
+
+        data = [normal, not_normal]
+
+        group_labels = ['normal', 'not normal']
+        colors = ['#A56CC1', '#A6ACEC']
+
+        # Create distplot with curve_type set to 'normal'
+        fig = ff.create_distplot(data, group_labels, colors=colors,
+                                 bin_size=bin_size, show_rug=False,
+                                 histnorm='probability')
+
+        # Add title
+        fig.update_layout(title_text='Distribution of Losses')
+
+        return fig
 
 # # Example:
 # import os
