@@ -113,7 +113,11 @@ class MedianFilter(object):
 
 
 class OtsuFilter(object):
-    """Apply Otsu filter and cut rest of the image"""
+    """
+    Apply Otsu filter and cut rest of the image
+    First add histogram equalization to the image, smooth the noise with median filter, run otsu filter and
+    apply mask on original image
+    """
 
     def __init__(self, active: bool):
         """
