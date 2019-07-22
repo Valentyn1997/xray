@@ -96,7 +96,7 @@ composed_transforms_val = Compose([GrayScale(),
                                        active=run_params['pipeline']['adaptive_hist_equilization']),
                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                    Augmentation(
-                                       iaa.Sequential([[iaa.PadToFixedSize(*run_params['image_resolution'], position='center')])),
+                                       iaa.Sequential([iaa.PadToFixedSize(*run_params['image_resolution'], position='center')])),
                                    # Padding(max_shape=run_params['image_resolution']),
                                    # max_shape - max size of image after augmentation
                                    MinMaxNormalization(),
