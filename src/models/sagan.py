@@ -1,4 +1,5 @@
-import matplotlib.pyplot as plt
+import itertools
+
 import mlflow
 import numpy as np
 import torch
@@ -180,14 +181,8 @@ class Encoder(nn.Module):
         self.l2 = nn.Sequential(*layer2)
         self.l3 = nn.Sequential(*layer3)
 
-        self.mean = nn.Sequential(
-            nn.Conv2d(curr_dim, z_dim, 4),
-            nn.Tanh(),
-        )
-        self.log_var = nn.Sequential(
-            nn.Conv2d(curr_dim, z_dim, 4),
-            nn.Tanh(),
-        )
+        last.append(nn.Conv2d(curr_dim, z_dim, 4))
+        self.last = nn.Sequential(*last)
 
         if self.imsize == 128:
             self.attn1 = Self_Attn(self.imsize * 4, 'relu')
@@ -200,14 +195,20 @@ class Encoder(nn.Module):
         out = self.l1(x)
         out = self.l2(out)
         out = self.l3(out)
-        out = self.l4(out)
-        out, p1 = self.attn1(out)
-        out = self.l5(out)
-        out, p2 = self.attn2(out)
-        mean = self.mean(out)
-        log_var = self.log_var(out)
 
-        return mean.squeeze(), log_var.squeeze(), p1, p2
+        if self.imsize == 64:
+            out, p1 = self.attn1(out)
+            out = self.l4(out)
+            out, p2 = self.attn2(out)
+        if self.imsize == 128:
+            out = self.l4(out)
+            out, p1 = self.attn1(out)
+            out = self.l5(out)
+            out, p2 = self.attn2(out)
+
+        out = self.last(out)
+
+        return out.squeeze(), p1, p2
 
 
 class Discriminator(nn.Module):
@@ -255,8 +256,8 @@ class Discriminator(nn.Module):
         self.l2 = nn.Sequential(*layer2)
         self.l3 = nn.Sequential(*layer3)
 
-        last.append(SpectralNorm(nn.Conv2d(curr_dim, 1, 4)))
-        last.append(nn.Sigmoid())
+        last.append(SpectralNorm(nn.Conv2d(curr_dim, curr_dim, 4)))
+        last.append(nn.LeakyReLU(0.1))
         self.last = nn.Sequential(*last)
 
         if self.imsize == 128:
@@ -266,66 +267,56 @@ class Discriminator(nn.Module):
             self.attn1 = Self_Attn(256, 'relu')
             self.attn2 = Self_Attn(512, 'relu')
 
-    def forward(self, x):
+        # For inference z
+        self.infer_z = nn.Sequential(
+            SpectralNorm(nn.Conv2d(z_dim, 512, 1)),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(nn.Conv2d(512, 512, 1)),
+            nn.LeakyReLU(0.1),
+        )
+
+        # For inference joint x,z
+        self.infer_joint = nn.Sequential(
+            SpectralNorm(nn.Conv2d(1024 if self.imsize == 64 else 1536, 1024, 1)),
+            nn.LeakyReLU(0.1),
+            SpectralNorm(nn.Conv2d(1024, 1024, 1)),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(1024, 1, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x, z):
         # Inference x
         x = self.l1(x)
         x = self.l2(x)
         x = self.l3(x)
-        x = self.l4(x)
-        x3, p1 = self.attn1(x)
-        x = self.l5(x3)
-        x4, p2 = self.attn2(x)
+
+        if self.imsize == 64:
+            x3, p1 = self.attn1(x)
+            out = self.l4(x3)
+            x4, p2 = self.attn2(out)
+        if self.imsize == 128:
+            x = self.l4(x)
+            x3, p1 = self.attn1(x)
+            out = self.l5(x3)
+            x4, p2 = self.attn2(out)
+
         x5 = self.last(x4)
 
-        return x5.squeeze(), x4, x3, p1, p2
+        # Inference z
+        z = z.view(z.size(0), z.size(1), 1, 1)
+        out_z = self.infer_z(z)
+
+        # Inference joint
+        out = self.infer_joint(torch.cat([x5, out_z], dim=1))
+        return out.squeeze(), x5, x4, x3, out_z, p2, p1
 
 
-class Codescriminator(nn.Module):
-    def __init__(self, z_dim=100):
-        super(Codescriminator, self).__init__()
-        self.hyper_parameters = locals()
-        self.hyper_parameters.pop('self')
-        self.z_dim = z_dim
-        layer1 = []
-        layer2 = []
-        layer3 = []
-        last = []
-
-        ## For inference x
-        curr_dim = int(self.z_dim / 2)
-        layer1.append(nn.Linear(self.z_dim, curr_dim))
-        layer1.append(nn.LeakyReLU(0.1))
-
-        curr_dim = int(curr_dim / 2)
-        layer2.append(nn.Linear(curr_dim * 2, curr_dim))
-        layer2.append(nn.LeakyReLU(0.1))
-
-        curr_dim = int(curr_dim / 2)
-        layer3.append(nn.Linear(curr_dim * 2, curr_dim))
-        layer3.append(nn.LeakyReLU(0.1))
-
-        last.append(nn.Linear(curr_dim, 1))
-        last.append(nn.Sigmoid())
-
-        self.l1 = nn.Sequential(*layer1)
-        self.l2 = nn.Sequential(*layer2)
-        self.l3 = nn.Sequential(*layer3)
-        self.last = nn.Sequential(*last)
-
-    def forward(self, x):
-        x = self.l1(x.squeeze())
-        x = self.l2(x)
-        x = self.l3(x)
-        x = self.last(x)
-
-        return x.squeeze()
-
-
-class AlphaGan(nn.Module):
+class SAGAN(nn.Module):
     def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
                  soft_labels=True, dlr=0.00005, gelr=0.001, soft_delta=0.1, z_dim=100,
                  adv_loss='hinge', masked_loss_on_val=True, image_size=(512, 512), *args, **kwargs):
-        super(AlphaGan, self).__init__()
+        super(SAGAN, self).__init__()
 
         self.hyper_parameters = locals()
         self.hyper_parameters.pop('self')
@@ -336,44 +327,33 @@ class AlphaGan(nn.Module):
         self.generator = Generator(image_size=image_size[0], z_dim=self.d_z)
         self.discriminator = Discriminator(image_size=image_size[0], z_dim=self.d_z)
         self.encoder = Encoder(image_size=image_size[0], z_dim=self.d_z)
-        self.codescriminator = Codescriminator(z_dim=self.d_z)
         self.hyper_parameters['discriminator'] = self.discriminator.hyper_parameters
         self.hyper_parameters['generator'] = self.generator.hyper_parameters
         self.hyper_parameters['encoder'] = self.encoder.hyper_parameters
-        self.hyper_parameters['codiscriminator'] = self.codescriminator.hyper_parameters
 
         # Create batch of latent vectors that we will use to visualize the progression of the generator
         self.fixed_noise = torch.randn(32, self.d_z, device=self.device)
 
         # Losses
         # self.inner_loss = nn.BCELoss()
-        self.l1 = nn.L1Loss()
-        self.bce = nn.BCELoss()
         self.masked_loss_on_val = masked_loss_on_val
         self.outer_loss = MaskedMSELoss(reduction='none') if self.masked_loss_on_val else nn.MSELoss(reduction='none')
 
         # Optimizers for discriminator and generator
-
-        self.e_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.encoder.parameters()), gelr,
-                                            (0.5, 0.999))
-        self.g_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.generator.parameters()), gelr,
-                                            (0.5, 0.999))
-        self.d_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.discriminator.parameters()), dlr,
-                                            betas=(0.5, 0.999))
-        self.c_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.codescriminator.parameters()), dlr,
-                                            betas=(0.5, 0.999))
+        self.ge_optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, itertools.chain(self.generator.parameters(), self.encoder.parameters())),
+            lr=gelr, betas=(0.5, 0.999))
+        self.d_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.discriminator.parameters()),
+                                            lr=dlr, betas=(0.5, 0.999))
 
         # Placeholders for losses of disriminator and generator
-        self.g_loss = None
-        self.e_loss = None
-        self.c_loss = None
+        self.ge_loss = None
         self.d_loss = None
 
     def to(self, *args, **kwargs):
         self.generator.to(*args, **kwargs)
         self.discriminator.to(*args, **kwargs)
         self.encoder.to(*args, **kwargs)
-        self.codescriminator.to(*args, **kwargs)
         return self
 
     def forward(self, x, discriminator=True):
@@ -391,14 +371,12 @@ class AlphaGan(nn.Module):
         print('Generator:')
         model_summary, trainable_paramsG = summary(self.generator, input_size=(self.d_z, 1, 1), device=self.device)
         print('Discriminator:')
-        model_summary, trainable_paramsD = summary(self.discriminator, input_size=(1, *image_resolution),
-                                                   device=self.device)
+        # model_summary, trainable_paramsD = summary(self.discriminator, input_size=((1, *image_resolution), self.d_z),
+        #                                            device=self.device)
         print('Encoder:')
         model_summary, trainable_paramsE = summary(self.encoder, input_size=(1, *image_resolution),
                                                    device=self.device)
-        print('Codescriminator:')
-        model_summary, trainable_paramsC = summary(self.codescriminator, input_size=(self.d_z,), device=self.device)
-        return trainable_paramsG + trainable_paramsE + trainable_paramsD + trainable_paramsC
+        return trainable_paramsG + trainable_paramsE
 
     def train_on_batch(self, batch_data, epoch, num_epochs, *args, **kwargs):
         """
@@ -412,78 +390,87 @@ class AlphaGan(nn.Module):
         self.discriminator.train()
         self.generator.train()
         self.encoder.train()
-        self.codescriminator.train()
 
         self.discriminator.zero_grad()
         self.generator.zero_grad()
         self.encoder.zero_grad()
-        self.codescriminator.zero_grad()
 
         # Format input batch
         real_images = Variable(batch_data['image']).to(self.device)  # Real images
         fake_z = Variable(torch.randn(real_images.size(0), self.d_z)).to(self.device)  # Noise for generator
 
-        real_labels = Variable(torch.ones((real_images.size(0)))).to(self.device)
-        fake_labels = Variable(torch.zeros((real_images.size(0)))).to(self.device)
+        noise1 = torch.Tensor(real_images.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
+                epoch + 1)).cuda()  # Noise for real images
+        noise2 = torch.Tensor(real_images.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
+                epoch + 1)).cuda()  # Noise for fake images
 
-        # Encoder
-        z_mean, z_logvar, _, _ = self.encoder(real_images)
-        z_hat = z_mean + z_logvar * torch.randn(z_mean.size()).to(self.device)
-        # Decoder (generator)
-        x_rec, x_rec4, x_rec3 = self.generator(z_hat)
-        x_gen, x_gen4, x_gen3 = self.generator(fake_z)
+        real_z, _, _ = self.encoder(real_images)  # Encoding real images
 
-        # Discriminator
-        d_real, d_real4, d_real3, _, _ = self.discriminator(real_images)
-        d_rec, d_rec4, d_rec3, _, _ = self.discriminator(x_rec)
-        d_gen, d_gen4, d_gen3, _, _ = self.discriminator(x_gen)
+        fake_images, gf1, gf2 = self.generator(fake_z)  # Generating fake images
 
-        # Codecriminator
-        c_z_hat = self.codescriminator(z_hat)
-        c_z = self.codescriminator(fake_z)
+        dr, dr5, dr4, dr3, drz, dra2, dra1 = self.discriminator(real_images + noise1, real_z)
+        df, df5, df4, df3, dfz, dfa2, dfa1 = self.discriminator(fake_images + noise2, fake_z)
 
-        # ================== Train E ================== #
-        self.e_optimizer.zero_grad()
-        l1_loss = 0.01 * self.l1(real_images, x_rec)
-        c_hat_loss = self.bce(c_z_hat, real_labels) - self.bce(c_z_hat, fake_labels)
-        e_loss = l1_loss + c_hat_loss
-        e_loss.backward(retain_graph=True)
-        self.e_optimizer.step()
-
-        # ================== Train G ================== #
-        self.g_optimizer.zero_grad()
-        g_rec_loss = self.bce(d_rec, real_labels) - self.bce(d_rec, fake_labels)
-        g_gen_loss = self.bce(d_gen, real_labels) - self.bce(d_gen, fake_labels)
-        g_loss = l1_loss + g_rec_loss + g_gen_loss
-        g_loss.backward(retain_graph=True)
-        self.g_optimizer.step()
+        # Compute loss with real and fake images
+        # dr1, dr2, df1, df2, gf1, gf2 are attention scores
+        if self.adv_loss == 'wgan-gp':
+            d_loss_real = - torch.mean(dr)
+            d_loss_fake = df.mean()
+            g_loss_fake = - df.mean()
+            e_loss_real = - dr.mean()
+        elif self.adv_loss == 'hinge1':
+            d_loss_real = torch.nn.ReLU()(1.0 - dr).mean()
+            d_loss_fake = torch.nn.ReLU()(1.0 + df).mean()
+            g_loss_fake = - df.mean()
+            e_loss_real = - dr.mean()
+        elif self.adv_loss == 'hinge':
+            d_loss_real = - torch.log(dr + 1e-10).mean()
+            d_loss_fake = - torch.log(1.0 - df + 1e-10).mean()
+            g_loss_fake = - torch.log(df + 1e-10).mean()
+            e_loss_real = - torch.log(1.0 - dr + 1e-10).mean()
+        elif self.adv_loss == 'inverse':
+            d_loss_real = - torch.log(1.0 - dr + 1e-10).mean()
+            d_loss_fake = - torch.log(df + 1e-10).mean()
+            g_loss_fake = - torch.log(1.0 - df + 1e-10).mean()
+            e_loss_real = - torch.log(dr + 1e-10).mean()
 
         # ================== Train D ================== #
-        self.d_optimizer.zero_grad()
-        d_real_loss = self.bce(d_real, real_labels)
-        d_rec_loss = self.bce(d_rec, fake_labels)
-        d_gen_loss = self.bce(d_gen, fake_labels)
-        d_loss = d_real_loss + d_rec_loss + d_gen_loss
+        d_loss = d_loss_real + d_loss_fake
         d_loss.backward(retain_graph=True)
         self.d_optimizer.step()
 
-        # ================== Train C ================== #
-        self.c_optimizer.zero_grad()
-        c_hat_loss = self.bce(c_z_hat, fake_labels)
-        c_z_loss = self.bce(c_z, real_labels)
-        c_loss = c_hat_loss + c_z_loss
-        c_loss.backward()
-        self.c_optimizer.step()
+        if self.adv_loss == 'wgan-gp':
+            # Compute gradient penalty
+            alpha = torch.rand(real_images.size(0), 1, 1, 1).cuda().expand_as(real_images)
+            interpolated = Variable(alpha * real_images.data + (1 - alpha) * fake_images.data, requires_grad=True)
+            out, _, _ = self.discriminator(interpolated)
 
+            grad = torch.autograd.grad(outputs=out,
+                                       inputs=interpolated,
+                                       grad_outputs=torch.ones(out.size()).cuda(),
+                                       retain_graph=True,
+                                       create_graph=True,
+                                       only_inputs=True)[0]
+
+            grad = grad.view(grad.size(0), -1)
+            grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
+            d_loss_gp = torch.mean((grad_l2norm - 1) ** 2)
+
+            # Backward + Optimize
+            d_loss = self.lambda_gp * d_loss_gp
+
+            d_loss.backward()
+            self.d_optimizer.step()
+
+        # ================== Train G and E ================== #
+        ge_loss = g_loss_fake + e_loss_real
+        ge_loss.backward()
+        self.ge_optimizer.step()
+
+        self.ge_loss = ge_loss.data
         self.d_loss = d_loss.data
-        self.g_loss = g_loss.data
-        self.e_loss = e_loss.data
-        self.c_loss = c_loss.data
-
-        return {'generator loss': float(self.g_loss),
-                'encoder loss': float(self.g_loss),
-                'discriminator loss': float(self.d_loss),
-                'codiscriminator loss': float(self.c_loss)}
+        return {'generator-encoder loss': float(self.ge_loss),
+                'discriminator loss': float(self.d_loss)}
 
     def visualize_generator(self, epoch, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
@@ -523,18 +510,16 @@ class AlphaGan(nn.Module):
                 mask = batch_data['mask'].to(self.device)
 
                 # Forward pass
-                z_mean, z_logvar, _, _ = self.encoder(inp)
-                # z_hat = z_mean + z_logvar * torch.randn(z_mean.size()).to(self.device)
-                if len(z_mean.size()) == 1:
-                    z_mean = z_mean.view(1, z_mean.size(0))
-                # Decoder (generator)
-                x_rec, _, _ = self.generator(z_mean)
+                real_z, _, _ = self.encoder(inp)
+                if len(real_z.size()) == 1:
+                    real_z = real_z.view(1, real_z.size(0))
+                reconstructed_img, _, _ = self.generator(real_z)
 
-                loss = self.outer_loss(x_rec, inp, mask) if self.masked_loss_on_val \
-                    else self.outer_loss(x_rec, inp)
+                loss = self.outer_loss(reconstructed_img, inp, mask) if self.masked_loss_on_val \
+                    else self.outer_loss(reconstructed_img, inp)
 
                 # Scores, based on output of discriminator - Higher score must correspond to positive labeled images
-                proba = self.discriminator(inp)[0].to('cpu').numpy().reshape(-1)
+                proba = self.discriminator(inp, real_z)[0].to('cpu').numpy().reshape(-1)
 
                 # Scores, based on MSE - higher MSE correspond to abnormal image
                 if self.masked_loss_on_val:
@@ -573,7 +558,9 @@ class AlphaGan(nn.Module):
             print(f'MSE on {type}: {mse}')
             print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
 
-            metrics = {"roc-auc_mse": roc_auc_mse,
+            metrics = {"d_loss_train": float(self.d_loss),
+                       "ge_loss_train": float(self.ge_loss),
+                       "roc-auc_mse": roc_auc_mse,
                        "roc-auc_proba": roc_auc_proba,
                        "mse": mse,
                        "f1-score": f1,
@@ -589,33 +576,3 @@ class AlphaGan(nn.Module):
         mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
         mlflow.pytorch.log_model(self.encoder, f'{self.encoder.__class__.__name__}')
         mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
-
-    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
-        """
-        Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
-        :param inp_image: Image for evaluation
-        :param label: Label of image
-        :param epoch: Epoch
-        :param path: Path to save image to
-        """
-        # Evaluation mode
-        self.generator.eval()
-        self.encoder.eval()
-        with torch.no_grad():
-            # Format input batch
-            inp = inp_image.to(self.device)
-
-            # Forward pass
-            z_mean, z_logvar, _, _ = self.encoder(inp)
-            # z_hat = z_mean + z_logvar * torch.randn(z_mean.size()).to(self.device)
-            if len(z_mean.size()) == 1:
-                z_mean = z_mean.view(1, z_mean.size(0))
-            x_rec, _, _ = self.generator(z_mean)
-
-            inp_image = inp_image.to('cpu')
-            x_rec = x_rec.to('cpu')
-            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            ax[1].imshow(x_rec.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
-            plt.close(fig)
