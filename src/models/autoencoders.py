@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
@@ -5,7 +7,6 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from tqdm import tqdm
-from typing import List
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
@@ -300,6 +301,9 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                 x = layer(x)
         return x
 
+    def save_to_mlflow(self):
+        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
+
 
 class SkipConnection(BottleneckAutoencoder):
 
@@ -400,3 +404,6 @@ class SkipConnection(BottleneckAutoencoder):
                 x = layer(x)
 
         return x
+
+    def save_to_mlflow(self):
+        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')

@@ -1,8 +1,8 @@
+from collections import OrderedDict
+
+import numpy as np
 import torch
 import torch.nn as nn
-
-from collections import OrderedDict
-import numpy as np
 
 
 def summary(model, input_size, batch_size=-1, device="cuda"):
@@ -85,7 +85,8 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
             "{0:,}".format(output_summary[layer]["nb_params"]),
         )
         total_params += output_summary[layer]["nb_params"]
-        total_output += np.prod(output_summary[layer]["output_shape"])
+        if list not in [type(out) for out in output_summary[layer]["output_shape"]]:
+            total_output += np.prod(output_summary[layer]["output_shape"])
         if "trainable" in output_summary[layer]:
             if output_summary[layer]["trainable"]:
                 trainable_params += output_summary[layer]["nb_params"]
@@ -94,7 +95,10 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
     # assume 4 bytes/number (float on cuda).
     total_input_size = abs(np.prod(input_size) * batch_size * 4. / (1024 ** 2.))
     total_output_size = abs(2. * total_output * 4. / (1024 ** 2.))  # x2 for gradients
-    total_params_size = abs(total_params.numpy() * 4. / (1024 ** 2.))
+    if type(total_params) != int:
+        total_params_size = abs(total_params.numpy() * 4. / (1024 ** 2.))
+    else:
+        total_params_size = total_params
     total_size = total_params_size + total_output_size + total_input_size
 
     print("================================================================")
