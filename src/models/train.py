@@ -15,6 +15,7 @@ from src.features.augmentation import Augmentation
 from src.models.alphagan import AlphaGan
 from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, SkipConnection
 from src.models.gans import DCGAN
+from src.models.sagan import SAGAN
 from src.models.vaetorch import VAE
 from src.utils import query_yes_no
 
@@ -48,7 +49,7 @@ run_params = {
     'masked_loss_on_train': True,
     'soft_labels': True,
     'glr': 0.001,
-    'dlr': 0.0001,
+    'dlr': 0.000005,
     'z_dim': 200,
     'lr': 0.0001,
     'soft_delta': 0.05,
@@ -160,9 +161,17 @@ for epoch in range(1, run_params['num_epochs'] + 1):
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
-    elif model_class in [DCGAN, AlphaGan] and epoch % 3 == 0:
+    elif model_class in [DCGAN, SAGAN] and epoch % 3 == 0:
         # evaluate performance of generator
         model.visualize_generator(epoch)
+    elif model_class in [AlphaGan] and epoch % 2 == 0:
+        # evaluate performance of generator
+        model.visualize_generator(epoch)
+        # evaluate performance of encoder / generator
+        index = np.random.randint(0, len(validation), 1)[0]
+        model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
+    if epoch % 50 == 0:
+        torch.save(model, f'{MODELS_DIR}/{model_class.__name__}{epoch}.pth')
 
 print('=========Training ended==========')
 
