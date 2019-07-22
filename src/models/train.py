@@ -11,9 +11,10 @@ from tqdm import tqdm
 from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
+from src.data.transforms import OtsuFilter, AdaptiveHistogramEqualization
 from src.features.augmentation import Augmentation
 from src.models.alphagan import AlphaGan
-from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, SkipConnection
+from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, SkipConnection, Bottleneck
 from src.models.gans import DCGAN
 from src.models.sagan import SAGAN
 from src.models.vaetorch import VAE
@@ -42,7 +43,9 @@ run_params = {
     'batch_normalisation': True,
     'spectral_normalisation': True,
     'pipeline': {
-        'hist_equalisation': False,
+        'hist_equalisation': True,
+        'otsu_filter': False,
+        'adaptive_hist_equilization': False,
         'data_source': 'XR_HAND_PHOTOSHOP',
     },
     'masked_loss_on_val': True,
@@ -75,6 +78,9 @@ run_params['augmentation'] = augmentation_seq.get_all_children()
 # Preprocessing pipeline
 composed_transforms = Compose([GrayScale(),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                               OtsuFilter(active=run_params['pipeline']['otsu_filter']),
+                               AdaptiveHistogramEqualization(
+                                   active=run_params['pipeline']['adaptive_hist_equilization']),
                                Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                Augmentation(augmentation_seq),
                                # Padding(max_shape=run_params['image_resolution']),
@@ -85,9 +91,12 @@ composed_transforms = Compose([GrayScale(),
 
 composed_transforms_val = Compose([GrayScale(),
                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
+                                   OtsuFilter(active=run_params['pipeline']['otsu_filter']),
+                                   AdaptiveHistogramEqualization(
+                                       active=run_params['pipeline']['adaptive_hist_equilization']),
                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
-                                   Augmentation(iaa.Sequential(
-                                       [iaa.PadToFixedSize(*run_params['image_resolution'], position='center')])),
+                                   Augmentation(
+                                       iaa.Sequential([iaa.PadToFixedSize(*run_params['image_resolution'], position='center')])),
                                    # Padding(max_shape=run_params['image_resolution']),
                                    # max_shape - max size of image after augmentation
                                    MinMaxNormalization(),
@@ -157,7 +166,7 @@ for epoch in range(1, run_params['num_epochs'] + 1):
     # validation
     val_metrics = model.evaluate(val_loader, 'validation', log_to_mlflow=log_to_mlflow)
 
-    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE, SkipConnection]:
+    if model_class in [BottleneckAutoencoder, BaselineAutoencoder, VAE, SkipConnection, Bottleneck]:
         # forward pass for the random validation image
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
