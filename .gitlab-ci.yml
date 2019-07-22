@@ -31,7 +31,7 @@ stages:
 
 linting_job:
   stage: build
-  script: flake8 --exclude=venv*,docs,*.yml,setup.py --statistics --max-line-length=158 --ignore=C901
+  script: flake8 --exclude=venv*,docs,*.yml,setup.py --statistics --max-line-length=158 --ignore=C901, F841
   
 
 example_job:

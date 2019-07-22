@@ -8,6 +8,7 @@ pandas
 opencv-python
 numpy
 torch
+scipy
 # local package
 # -e .
 
@@ -22,3 +23,4 @@ numpy
 opencv-python
 imutils
 imgaug
+plotly
