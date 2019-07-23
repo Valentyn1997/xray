@@ -26,7 +26,7 @@ torch.manual_seed(42)
 
 model_class = AlphaGan
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# device = 'cpu'
+device = 'cpu'
 num_workers = 12
 log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 
@@ -49,7 +49,7 @@ run_params = {
     'masked_loss_on_train': True,
     'soft_labels': True,
     'glr': 0.001,
-    'dlr': 0.000005,
+    'dlr': 0.0001,
     'z_dim': 200,
     'lr': 0.0001,
     'soft_delta': 0.05,
