@@ -19,6 +19,7 @@ from PIL import Image
 import cv2
 # from object_detection.utils import ops as utils_ops
 from object_detection.utils import label_map_util
+import imutils
 
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
@@ -29,9 +30,11 @@ sys.path.append("..")
 '''
 ## Variables
 
-Any model exported using the `export_inference_graph.py` tool can be loaded here simply by changing `PATH_TO_FROZEN_GRAPH` to point to a new .pb file.
+Any model exported using the `export_inference_graph.py` tool can be loaded here simply
+by changing `PATH_TO_FROZEN_GRAPH` to point to a new .pb file.
 By default we use an "SSD with Mobilenet" model here.
-See the [detection model zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md)
+See the [detection model zoo]
+(https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md)
 for a list of other models that can be run out-of-the-box with varying speeds and accuracies.
 '''
 
@@ -69,7 +72,7 @@ rl: right label
 # Detection
 # If you want to test the code with your images, just add path to the images to the TEST_IMAGE_PATHS.
 # PATH_TO_TEST_IMAGES_DIR = 'test_images'
-PATH_TO_TEST_IMAGES_DIR = '../../../train/XR_HAND_CROPPED'
+PATH_TO_TEST_IMAGES_DIR = '../../../train/XR_HAND'
 TEST_IMAGE_PATHS = []
 
 # Size, in inches, of the output images.
@@ -119,7 +122,7 @@ log.write('Starting script.\n')
 j = 0
 count = 0
 
-SAVE_PATH = r'../../../train/XR_HAND_CENTRED_NEW'
+SAVE_PATH = r'../../../train/XR_HAND_CENTRED_NEW_2'
 
 if not os.path.exists(os.path.exists(SAVE_PATH)):
     os.mkdir(SAVE_PATH)
@@ -129,15 +132,25 @@ for image_path in TEST_IMAGE_PATHS:
     # print(count,end='\r')
     log.write(str(count) + ' ')
     image = Image.open(image_path)
+    image_rotate = image.transpose(Image.ROTATE_270)
     # the array based representation of the image will be used later in order to prepare the
     # result image with boxes and labels on it.
     image_np = cv2.imread(image_path, 1)
+    image_np_rotate = imutils.rotate_bound(image_np, 90)
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
     image_np_expanded = np.expand_dims(image_np, axis=0)
+    image_np_rotate_expanded = np.expand_dims(image_np_rotate, axis=0)
     # Actual detection.
     output_dict = run_inference_for_single_image(image_np_expanded, detection_graph)
+    output_dict_rotate = run_inference_for_single_image(image_np_rotate_expanded, detection_graph)
     # Visualization of the results of a detection.
     boxes = output_dict['detection_boxes']
+    boxes_rotate = output_dict_rotate['detection_boxes']
+    if output_dict_rotate['num_detections'] > output_dict['num_detections']:
+        image = image_rotate
+        image_np = image_np_rotate
+        boxes = boxes_rotate
+
     bool_anything_found = 0
     detection_number = 0
     for i in range(output_dict['num_detections']):
