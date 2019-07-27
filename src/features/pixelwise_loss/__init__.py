@@ -1,10 +1,12 @@
 from os.path import basename, dirname
-from src import TMP_IMAGES_DIR
-from tqdm import tqdm
-import torch
+
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from scipy.ndimage.filters import gaussian_filter
+from tqdm import tqdm
+
+from src import TMP_IMAGES_DIR
 
 
 class PixelwiseLoss:
@@ -65,10 +67,10 @@ class PixelwiseLoss:
                     loss = loss.cpu().numpy()
 
                 # get the first image from and save heatmap
-                self.add_heatmap(inp[0].data[0, :, :], batch_data['label'].numpy()[0],
-                                 batch_data['patient'].numpy()[0],
-                                 loss[0][0, :, :],
-                                 batch_data['filename'][0])
+                # self.add_heatmap(inp[0].data[0, :, :], batch_data['label'].numpy()[0],
+                #                  batch_data['patient'].numpy()[0],
+                #                  loss[0][0, :, :],
+                #                  batch_data['filename'][0])
 
                 # append values to list
                 pixelwise_loss.extend(loss)
@@ -81,7 +83,7 @@ class PixelwiseLoss:
             return out
 
     def add_heatmap(self, inp_image, label, patient, loss, original_path, max_loss=0.002,
-                    sigma=5, path=TMP_IMAGES_DIR, save=True, display=False):
+                    sigma=5, path=TMP_IMAGES_DIR, save=True, display=False, figsize=(5, 5)):
         """
         Add heatmap layer on top of the image
         :param inp_image: imput image array
@@ -98,13 +100,13 @@ class PixelwiseLoss:
         loss = gaussian_filter(loss, sigma)
 
         mycmap = self._transparent_cmap(plt.cm.Reds)
-        inp_image = inp_image.numpy()
+        # inp_image = inp_image.numpy()
         w, h = inp_image.shape
         y, x = np.mgrid[0:h, 0:w]
         # Plot image and overlay colormap
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
         ax.imshow(inp_image, cmap='gray')
-        ax.set_title(label)
+        ax.set_title(f'Patient: {patient}. Label: {label}')
         ax.contourf(x, y, loss, 50, cmap=mycmap, vmin=0, vmax=max_loss)
 
         if save:
