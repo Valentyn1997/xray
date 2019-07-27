@@ -36,28 +36,45 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(model_class.__name__)
 
 # Mlflow parameters
-run_params = {
-    'batch_size': 18,
-    'image_resolution': (128, 128),
-    'num_epochs': 1000,
-    'batch_normalisation': True,
-    'spectral_normalisation': True,
-    'pipeline': {
-        'hist_equalisation': True,
-        'otsu_filter': False,
-        'adaptive_hist_equilization': False,
-        'data_source': 'XR_HAND_PHOTOSHOP',
-    },
-    'masked_loss_on_val': True,
-    'masked_loss_on_train': True,
-    'soft_labels': True,
-    'glr': 0.001,
-    'dlr': 0.0001,
-    'z_dim': 200,
-    'lr': 0.0001,
-    'soft_delta': 0.05,
-    'adv_loss': 'hinge',
-}
+if model_class in [AlphaGan, SAGAN, DCGAN]:
+    run_params = {
+        'batch_size': 18,
+        'image_resolution': (128, 128),
+        'num_epochs': 1000,
+        'batch_normalisation': True,
+        'spectral_normalisation': True,
+        'pipeline': {
+            'hist_equalisation': True,
+            'otsu_filter': False,
+            'adaptive_hist_equilization': False,
+            'data_source': 'XR_HAND_PHOTOSHOP',
+        },
+        'masked_loss_on_val': True,
+        'masked_loss_on_train': True,
+        'soft_labels': True,
+        'glr': 0.001,
+        'dlr': 0.0001,
+        'z_dim': 200,
+        'lr': 0.0001,
+        'soft_delta': 0.05,
+        'adv_loss': 'hinge',
+    }
+elif model_class in [BaselineAutoencoder, BottleneckAutoencoder]:
+    run_params = {
+        'batch_size': 32,
+        'image_resolution': (512, 512),
+        'num_epochs': 500,
+        'batch_normalisation': True,
+        'pipeline': {
+            'hist_equalisation': True,
+            'otsu_filter': False,
+            'adaptive_hist_equilization': False,
+            'data_source': 'XR_HAND_PHOTOSHOP',
+        },
+        'masked_loss_on_val': True,
+        'masked_loss_on_train': True,
+        'lr': 0.0001,
+    }
 
 # Augmentation
 augmentation_seq = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50% of all images
@@ -121,17 +138,7 @@ test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True
 # Model initialization
 model = model_class(device=device,
                     image_size=run_params['image_resolution'],
-                    batch_normalisation=run_params['batch_normalisation'],
-                    spectral_normalisation=run_params['spectral_normalisation'],
-                    masked_loss_on_val=run_params['masked_loss_on_val'],
-                    masked_loss_on_train=run_params['masked_loss_on_train'],
-                    soft_labels=run_params['soft_labels'],
-                    dlr=run_params['dlr'],
-                    glr=run_params['glr'],
-                    z_dim=run_params['z_dim'],
-                    lr=run_params['lr'],
-                    soft_delta=run_params['soft_delta'],
-                    adv_loss=run_params['adv_loss']).to(device)
+                    **run_params).to(device)
 # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
 # model.eval().to(device)
 print(f'\nMODEL ARCHITECTURE:')
