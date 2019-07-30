@@ -53,7 +53,7 @@ class PlotLossLabel:
                     score = sum_loss / sum_mask
                 else:
                     score = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
-
+                # saves score and label
                 self.scores.extend(score)
                 self.true_labels.extend(batch_data['label'].numpy())
 

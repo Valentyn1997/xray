@@ -10,43 +10,58 @@ Project Organization
 ------------
 
     ├── LICENSE
-    ├── Makefile           <- Makefile with commands like `make data` or `make train`
-    ├── README.md          <- The top-level README for developers using this projec
-    ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
+    ├── Makefile                <- Makefile with commands like `make data` or `make train`
+    ├── README.md               <- The top-level README for developers using this projec
+    ├── docs                    <- A default Sphinx project; see sphinx-doc.org for details
     │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
+    ├── models                  <- Trained and serialized models, model predictions, or model summaries
     │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
+    ├── notebooks               <- Jupyter notebooks. Naming convention is a number (for ordering),
+    │                              the creator's initials, and a short `-` delimited description, e.g.
+    │                              `1.0-jqp-initial-data-exploration`.
+    │   ├── augmentation        <- Jupyter notebooks. Analysis of augmentation
+    │   ├── dataset             <- Jupyter notebooks. Analysis of dataset
+    │   ├── edge_detection      <- Jupyter notebooks. Analysis of edge detection
+    │   ├── models              <- Jupyter notebooks. Analysis of models
+    │   └── preprocessing       <- Jupyter notebooks. Analysis of preprocessing steps
+    ├── references              <- Data dictionaries, manuals, and all other explanatory materials.
     │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
+    ├── reports                 <- Generated analysis as HTML, PDF, LaTeX, etc.
+    │   └── figures             <- Generated graphics and figures to be used in reporting
     │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
+    ├── requirements.txt        <- The requirements file for reproducing the analysis environment, e.g.
+    │                              generated with `pip freeze > requirements.txt`
     │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
+    ├── setup.py                <- makes project pip installable (pip install -e .) so src can be imported
+    ├── src                     <- Source code for use in this project.
+    │   ├── __init__.py         <- Makes src a Python module
     │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
+    │   ├── data                <- Scripts to split and transform the data
+    │   │   └── __init__.py     <- Datagenerator for PyTorch
+    │   │   └── transforms.py   <- Different online transformations
+    │   ├── features            <- Scripts to turn raw data into features for modeling
+    │   │   ├── augmentation    <- augmentation for training
+    │   │   ├── crop            <- square detection and cropping
+    │   │   ├── grabcut         <- example for grabcut
+    │   │   ├── hand_detection  <- SSD hand detection with cropping
+    │   │   ├── inversion       <- invert color images
+    │   │   ├── pixelwise_loss  <- calculate pixelwise_loss and create heatmap
+    │   │   ├── topk            <- calculate top k loss
+    │   │   └── unsupervised_anomaly_detection <- different unsupervised non deep learning methods
+    │   ├── models_creation     <- Scripts to train hand detection model see wiki for more information
+    │   ├── models              <- Scripts to train models and model definitions
+    │   │   └── train.py        <- Script to train the models
+    │   │   └── alphagan.py     <- Modeldefinition alphagan
+    │   │   └── autoencoders.py <- Modeldefinition differnt convolutional autoencoder
+    │   │   └── gans.py         <- Modeldefinition gan
+    │   │   └── sgan.py         <- Modeldefinition sgan
+    │   │   └── torchsummary.py <- get summary of models
+    │   │   └── vaetorch.py     <- Modeldefinition variational autoencoder
     │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
-    │
-    └── tox.ini            <- tox file with settings for running tox; see tox.testrun.org
+    │   │── visualization       <- Scripts to create exploratory and results oriented visualizations
+    │   │   └── plot_loss_label.py <- script to create loss-label plot for convolutional autoencoder
+    │   └-- utils.py            <- Scripts with helper function 
+    └── tox.ini                 <- tox file with settings for running tox; see tox.testrun.org
 
 
 --------

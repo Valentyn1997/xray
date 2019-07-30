@@ -6,6 +6,14 @@ import torch.nn as nn
 
 
 def summary(model, input_size, batch_size=-1, device="cuda"):
+    """
+
+    :param model: Pytorch model
+    :param input_size: the input size of the image
+    :param batch_size: int, batch size
+    :param device: string, device either cuda or cpu
+    :return: summary of pytorch model
+    """
 
     def register_hook(module):
 

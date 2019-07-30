@@ -25,10 +25,14 @@ from src.utils import query_yes_no
 np.seterr(divide='ignore', invalid='ignore')
 torch.manual_seed(42)
 
+# set model type
 model_class = AlphaGan
+# set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = 'cpu'
+# device = 'cpu'
+# set number of cpu kernels for data processing
 num_workers = 12
+# set
 log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 
 # Mlflow settings
@@ -36,7 +40,7 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(model_class.__name__)
 
 # Mlflow parameters
-if model_class in [AlphaGan, SAGAN, DCGAN]:
+if model_class in [AlphaGan, SAGAN, DCGAN, VAE]:
     run_params = {
         'batch_size': 18,
         'image_resolution': (128, 128),
@@ -59,7 +63,7 @@ if model_class in [AlphaGan, SAGAN, DCGAN]:
         'soft_delta': 0.05,
         'adv_loss': 'hinge',
     }
-elif model_class in [BaselineAutoencoder, BottleneckAutoencoder]:
+elif model_class in [BaselineAutoencoder, BottleneckAutoencoder, SkipConnection, Bottleneck]:
     run_params = {
         'batch_size': 32,
         'image_resolution': (512, 512),
@@ -93,6 +97,7 @@ run_params['augmentation'] = augmentation_seq.get_all_children()
 
 # ----------------------------- Data, preprocessing and model initialization ------------------------------------
 # Preprocessing pipeline
+# transformation for training
 composed_transforms = Compose([GrayScale(),
                                HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                OtsuFilter(active=run_params['pipeline']['otsu_filter']),
@@ -105,7 +110,7 @@ composed_transforms = Compose([GrayScale(),
                                MinMaxNormalization(),
                                ToTensor()])
 
-
+# transformation for validation and test
 composed_transforms_val = Compose([GrayScale(),
                                    HistEqualisation(active=run_params['pipeline']['hist_equalisation']),
                                    OtsuFilter(active=run_params['pipeline']['otsu_filter']),
@@ -123,6 +128,7 @@ composed_transforms_val = Compose([GrayScale(),
 print(f'\nDATA SPLIT:')
 data_path = f'{DATA_PATH}/{run_params["pipeline"]["data_source"]}'
 print(data_path)
+# Split data
 splitter = TrainValTestSplitter(path_to_data=data_path)
 train = MURASubset(filenames=splitter.data_train.path, patients=splitter.data_train.patient,
                    transform=composed_transforms, true_labels=np.zeros(len(splitter.data_train.path)))

@@ -4,9 +4,10 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src import XR_HAND_CENTRED_PATH
+from src import DATA_PATH
 
 # Saves data to the same folder
+XR_HAND_CENTRED_PATH = f'{DATA_PATH}/XR_HAND_CENTRED'
 path_to_data = f'{XR_HAND_CENTRED_PATH}/*/*/*'
 paths = glob.glob(path_to_data)
 
