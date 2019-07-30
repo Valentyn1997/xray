@@ -23,6 +23,13 @@ class MaskedMSELoss(nn.Module):
         self.criterion = nn.MSELoss(reduction='none')
 
     def forward(self, input, target, mask):
+        """
+        calculates masked loss
+        :param input: input image as array
+        :param target: reconstructed image as array
+        :param mask: mask of image as array
+        :return: masked loss
+        """
         loss = self.criterion(input * mask, target * mask)
         if self.reduction == 'mean':
             loss = torch.sum(loss) / torch.sum(mask)
@@ -306,7 +313,7 @@ class BottleneckAutoencoder(BaselineAutoencoder):
 
 
 class SkipConnection(BottleneckAutoencoder):
-
+    """Similar to bottleneck autoencoder but with some skip connection after ReLu"""
     def __init__(self,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
                  encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 256),
@@ -361,9 +368,9 @@ class SkipConnection(BottleneckAutoencoder):
         self.skip_connection_decoder = skip_connection_decoder
 
         self.encoder = nn.ModuleList(
-            self.encoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+            self.encoder_layers)
         self.decoder = nn.ModuleList(
-            self.decoder_layers)  # Not used in forward pass, but without it summary() doesn't work
+            self.decoder_layers)
 
         # Optimizer
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
@@ -371,9 +378,9 @@ class SkipConnection(BottleneckAutoencoder):
     def forward(self, x):
         maxpool_ind = []
         skip_connection_value = []
-        m = 0
-        n = 0
-        o = 0
+        m = 0  # index relu for encoder
+        n = 0  # index of skip connection value
+        o = 0  # index convolutional layer decoder
 
         for layer in self.encoder:
             if isinstance(layer, nn.MaxPool2d):
@@ -381,12 +388,13 @@ class SkipConnection(BottleneckAutoencoder):
                 maxpool_ind.append(ind)
             elif isinstance(layer, nn.ReLU):
                 x = layer(x)
+                # save value if skip connection is true
                 if self.skip_connection_encoder[m]:
                     skip_connection_value.append(x)
                 m = m + 1
             else:
                 x = layer(x)
-
+        # reverse the order of the list since decoder works the other way around
         skip_connection_value.reverse()
 
         for layer in self.decoder:
@@ -396,6 +404,7 @@ class SkipConnection(BottleneckAutoencoder):
                 x = layer(x, ind)
             elif isinstance(layer, nn.ConvTranspose2d):
                 if self.skip_connection_decoder[o]:
+                    # add values of skip connection
                     x = torch.cat((x, skip_connection_value[n]), dim=1)
                     n = n + 1
                 x = layer(x)
@@ -410,6 +419,7 @@ class SkipConnection(BottleneckAutoencoder):
 
 
 class Bottleneck(BaselineAutoencoder):
+    """Differs from bottleneckAutoencoder by switching the order of batchnormalization and activation"""
     def __init__(self,
                  encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
                  encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 256),

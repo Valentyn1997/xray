@@ -128,6 +128,7 @@ class OtsuFilter(object):
 
     def __call__(self, sample):
         if self.active:
+            # getimage
             img = sample['image']
             # add histogram equalization for better performance
             img_equ = cv2.equalizeHist(img)
@@ -155,5 +156,6 @@ class AdaptiveHistogramEqualization(object):
 
     def __call__(self, sample):
         if self.active:
+            #apply adaptive histogram equalization
             sample['image'] = self.clahe.apply(sample['image'])
         return sample

@@ -67,10 +67,10 @@ class PixelwiseLoss:
                     loss = loss.cpu().numpy()
 
                 # get the first image from and save heatmap
-                # self.add_heatmap(inp[0].data[0, :, :], batch_data['label'].numpy()[0],
-                #                  batch_data['patient'].numpy()[0],
-                #                  loss[0][0, :, :],
-                #                  batch_data['filename'][0])
+                self.add_heatmap(inp[0].data[0, :, :], batch_data['label'].numpy()[0],
+                                 batch_data['patient'].numpy()[0],
+                                 loss[0][0, :, :],
+                                 batch_data['filename'][0])
 
                 # append values to list
                 pixelwise_loss.extend(loss)

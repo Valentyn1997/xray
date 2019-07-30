@@ -54,6 +54,7 @@ class TopK:
         :param label: list with labels
         :return: dictionary with k and the correspondending auc score
         """
+        # get range
         range_steps = range(start, end, step)
         label_list = label
         roc_auc_list = []
@@ -82,12 +83,12 @@ class TopK:
 
         scores = scores
         true_labels = true_labels
-
+        # filter normal hands and not normal hands based on label
         normal = np.asarray([scores[i] for i in range(len(true_labels)) if true_labels[i] == 0])
         not_normal = np.asarray([scores[i] for i in range(len(true_labels)) if true_labels[i] == 1])
-
+        # add to list
         data = [normal, not_normal]
-
+        # add labels and color
         group_labels = ['normal', 'not normal']
         colors = ['#A56CC1', '#A6ACEC']
 

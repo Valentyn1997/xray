@@ -7,12 +7,15 @@ import sys
 from glob import glob
 from os.path import basename, dirname
 
-from src import XR_HAND_PATH, XR_HAND_CROPPED_PATH
+from src import DATA_PATH
 
 PY3 = sys.version_info[0] == 3
 
 if PY3:
     xrange = range
+
+XR_HAND_PATH = f'{DATA_PATH}/XR_HAND'
+XR_HAND_CROPPED_PATH = f'{DATA_PATH}/XR_HAND_CROPPED'
 
 out_path = XR_HAND_CROPPED_PATH
 data_dir = XR_HAND_PATH
