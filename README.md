@@ -32,20 +32,31 @@ Project Organization
     ├── src                <- Source code for use in this project.
     │   ├── __init__.py    <- Makes src a Python module
     │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
-    │   │
+    │   ├── data           <- Scripts to split and transform the data
+    │   │   └── __init__.py <- Datagenerator for PyTorch
+    │   │   └── transforms.py <- Different online transformations
     │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
+    │   │   └── augmentation <- augmentation for training
+    │   │   └── crop <- square detection and cropping
+    │   │   └── grabcut <- example for grabcut
+    │   │   └── hand_detection <- SSD hand detection with cropping
+    │   │   └── inversion <- invert color images
+    │   │   └── pixelwise_loss <- calculate pixelwise_loss and create heatmap
+    │   │   └── topk <- calculate top k loss
+    │   │   └── unsupervised_anomaly_detection <- different unsupervised non deep learning methods
+    │   ├── models_creation         <- Scripts to train hand detection model see wiki for more information
+    │   ├── models         <- Scripts to train models and model definitions
+    │   │   └── train.py <- Script to train the models
+    │   │   └── alphagan.py <- Modeldefinition alphagan
+    │   │   └── autoencoders.py <- Modeldefinition differnt convolutional autoencoder
+    │   │   └── gans.py <- Modeldefinition gan
+    │   │   └── sgan.py <- Modeldefinition sgan
+    │   │   └── torchsummary.py <- get summary of models
+    │   │   └── vaetorch.py <- Modeldefinition variational autoencoder
     │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
-    │
+    │   │── visualization  <- Scripts to create exploratory and results oriented visualizations
+    │   │   └── plot_loss_label.py script to create loss-label plot for convolutional autoencoder
+    │   └-- utils.py <- Scripts with helper function 
     └── tox.ini            <- tox file with settings for running tox; see tox.testrun.org
 
 
