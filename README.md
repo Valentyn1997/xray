@@ -40,13 +40,13 @@ Project Organization
     │   │   └── __init__.py     <- Datagenerator for PyTorch
     │   │   └── transforms.py   <- Different online transformations
     │   ├── features            <- Scripts to turn raw data into features for modeling
-    │   │   └── augmentation    <- augmentation for training
-    │   │   └── crop            <- square detection and cropping
-    │   │   └── grabcut         <- example for grabcut
-    │   │   └── hand_detection  <- SSD hand detection with cropping
-    │   │   └── inversion       <- invert color images
-    │   │   └── pixelwise_loss  <- calculate pixelwise_loss and create heatmap
-    │   │   └── topk            <- calculate top k loss
+    │   │   ├── augmentation    <- augmentation for training
+    │   │   ├── crop            <- square detection and cropping
+    │   │   ├── grabcut         <- example for grabcut
+    │   │   ├── hand_detection  <- SSD hand detection with cropping
+    │   │   ├── inversion       <- invert color images
+    │   │   ├── pixelwise_loss  <- calculate pixelwise_loss and create heatmap
+    │   │   ├── topk            <- calculate top k loss
     │   │   └── unsupervised_anomaly_detection <- different unsupervised non deep learning methods
     │   ├── models_creation     <- Scripts to train hand detection model see wiki for more information
     │   ├── models              <- Scripts to train models and model definitions
