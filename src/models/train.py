@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
-from src import MODELS_DIR, MLFLOW_TRACKING_URI, DATA_PATH
+from src import MLFLOW_TRACKING_URI, DATA_PATH
 from src.data import TrainValTestSplitter, MURASubset
 from src.data.transforms import GrayScale, Resize, HistEqualisation, MinMaxNormalization, ToTensor
 from src.data.transforms import OtsuFilter, AdaptiveHistogramEqualization
@@ -18,7 +18,7 @@ from src.models.autoencoders import BottleneckAutoencoder, BaselineAutoencoder, 
 from src.models.gans import DCGAN
 from src.models.sagan import SAGAN
 from src.models.vaetorch import VAE
-from src.utils import query_yes_no
+from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # Ignoring numpy warnings and setting seeds
@@ -42,22 +42,22 @@ mlflow.set_experiment(model_class.__name__)
 # Mlflow parameters
 if model_class in [AlphaGan, SAGAN, DCGAN, VAE]:
     run_params = {
-        'batch_size': 18,
+        'batch_size': 16,
         'image_resolution': (128, 128),
-        'num_epochs': 1000,
+        'num_epochs': 300,
         'batch_normalisation': True,
         'spectral_normalisation': True,
         'pipeline': {
-            'hist_equalisation': True,
+            'hist_equalisation': False,
             'otsu_filter': False,
             'adaptive_hist_equilization': False,
-            'data_source': 'XR_HAND_PHOTOSHOP',
+            'data_source': 'XR_HAND',
         },
         'masked_loss_on_val': True,
         'masked_loss_on_train': True,
         'soft_labels': True,
         'glr': 0.001,
-        'dlr': 0.0001,
+        'dlr': 0.00001,
         'z_dim': 200,
         'lr': 0.0001,
         'soft_delta': 0.05,
@@ -193,7 +193,7 @@ for epoch in range(1, run_params['num_epochs'] + 1):
         index = np.random.randint(0, len(validation), 1)[0]
         model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
     if epoch % 50 == 0:
-        torch.save(model, f'{MODELS_DIR}/{model_class.__name__}{epoch}.pth')
+        save_model(model, log_to_mlflow=log_to_mlflow)
 
 print('=========Training ended==========')
 
@@ -201,6 +201,4 @@ print('=========Training ended==========')
 model.evaluate(test_loader, 'test', log_to_mlflow=log_to_mlflow, val_metrics=val_metrics)
 
 # Saving
-torch.save(model, f'{MODELS_DIR}/{model_class.__name__}.pth')
-if log_to_mlflow:
-    model.save_to_mlflow()
+save_model(model, log_to_mlflow=log_to_mlflow)

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
+from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score, average_precision_score
 from torch.autograd import Variable
 from tqdm import tqdm
 
@@ -13,6 +13,7 @@ from src import TMP_IMAGES_DIR
 from src.models.autoencoders import MaskedMSELoss
 from src.models.gans import SpectralNorm
 from src.models.torchsummary import summary
+from src.utils import save_model
 
 
 class Self_Attn(nn.Module):
@@ -481,7 +482,9 @@ class SAGAN(nn.Module):
         with torch.no_grad():
             fake = self.generator(self.fixed_noise)[0].detach().cpu()
         img = vutils.make_grid(fake, padding=20, normalize=False)
-        vutils.save_image(img, f'{path}/epoch{epoch}.png')
+        img_path = f'{path}/epoch{epoch}.png'
+        vutils.save_image(img, img_path)
+        mlflow.log_artifact(img_path)
 
     def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
         """
@@ -540,9 +543,15 @@ class SAGAN(nn.Module):
             # ROC-AUC
             roc_auc_mse = roc_auc_score(true_labels, scores_mse)
             roc_auc_proba = roc_auc_score(true_labels, scores_proba)
+
+            # Average precision score
+            aps_mse = average_precision_score(true_labels, scores_mse)
+            aps_proba = average_precision_score(true_labels, scores_mse)
+
             # Mean discriminator proba on validation batch
             mse = scores_mse.mean()
             proba = scores_proba.mean()
+
             # F1-score & optimal threshold
             if opt_threshold is None:  # validation
                 precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores_mse)
@@ -562,6 +571,8 @@ class SAGAN(nn.Module):
                        "ge_loss_train": float(self.ge_loss),
                        "roc-auc_mse": roc_auc_mse,
                        "roc-auc_proba": roc_auc_proba,
+                       "aps_mse": aps_mse,
+                       "aps_proba": aps_proba,
                        "mse": mse,
                        "f1-score": f1,
                        "optimal mse threshold": opt_threshold}
@@ -573,6 +584,4 @@ class SAGAN(nn.Module):
             return metrics
 
     def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
-        mlflow.pytorch.log_model(self.encoder, f'{self.encoder.__class__.__name__}')
-        mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
+        save_model(self, log_to_mlflow=True)

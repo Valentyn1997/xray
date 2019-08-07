@@ -1,5 +1,10 @@
 import sys
 
+import mlflow
+import torch
+
+from src import MODELS_DIR
+
 
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
@@ -32,3 +37,9 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+
+def save_model(model, log_to_mlflow=False):
+    path = f'{MODELS_DIR}/{model.__class__.__name__}1.pth'
+    torch.save(model, path)
+    mlflow.log_artifact(path)

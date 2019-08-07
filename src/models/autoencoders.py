@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
+from src.utils import save_model
 
 
 class MaskedMSELoss(nn.Module):
@@ -232,7 +233,7 @@ class BaselineAutoencoder(nn.Module):
         return trainable_params
 
     def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
+        save_model(self, log_to_mlflow=True)
 
 
 class BottleneckAutoencoder(BaselineAutoencoder):
@@ -307,9 +308,6 @@ class BottleneckAutoencoder(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
-
-    def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
 
 
 class SkipConnection(BottleneckAutoencoder):
@@ -414,9 +412,6 @@ class SkipConnection(BottleneckAutoencoder):
 
         return x
 
-    def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')
-
 
 class Bottleneck(BaselineAutoencoder):
     """Differs from bottleneckAutoencoder by switching the order of batchnormalization and activation"""
@@ -491,6 +486,3 @@ class Bottleneck(BaselineAutoencoder):
             else:
                 x = layer(x)
         return x
-
-    def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self, f'{self.__class__.__name__}')

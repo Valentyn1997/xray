@@ -5,13 +5,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
+from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score, average_precision_score
 from torch.distributions.uniform import Uniform
 from torch.nn import Parameter
 from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
+from src.utils import save_model
 
 
 # custom weights initialization called on discriminator and generator
@@ -342,6 +343,10 @@ class DCGAN(nn.Module):
 
             # ROC-AUC
             roc_auc = roc_auc_score(true_labels, scores)
+
+            # APS
+            aps = average_precision_score(true_labels, scores)
+
             # Mean discriminator proba on validation batch
             discriminator_proba = scores.mean()
             # F1-score & optimal threshold
@@ -361,6 +366,7 @@ class DCGAN(nn.Module):
             metrics = {"d_loss_train": self.loss_D,
                        "g_loss_train": self.loss_G,
                        "roc-auc": roc_auc,
+                       "aps": aps,
                        "discriminator_proba": discriminator_proba,
                        "f1-score": f1,
                        "optimal discriminator_proba threshold": opt_threshold}
@@ -372,5 +378,4 @@ class DCGAN(nn.Module):
             return metrics
 
     def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
-        mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
+        save_model(self, log_to_mlflow=True)
