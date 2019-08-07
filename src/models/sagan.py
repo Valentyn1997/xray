@@ -546,7 +546,7 @@ class SAGAN(nn.Module):
 
             # Average precision score
             aps_mse = average_precision_score(true_labels, scores_mse)
-            aps_proba = average_precision_score(true_labels, scores_mse)
+            aps_proba = average_precision_score(true_labels, scores_proba)
 
             # Mean discriminator proba on validation batch
             mse = scores_mse.mean()
