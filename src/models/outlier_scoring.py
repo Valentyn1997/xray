@@ -1,7 +1,7 @@
+import numpy as np
+import plotly.figure_factory as ff
 import torch
 from sklearn.metrics import roc_auc_score
-import plotly.figure_factory as ff
-import numpy as np
 
 
 class TopK:
@@ -16,7 +16,8 @@ class TopK:
         self.loss = loss
         self.reduce_to_mean = reduce_to_mean
 
-    def calculate_topk(self, loss, k):
+    @staticmethod
+    def calculate(loss, k, reduce_to_mean=False):
         """
         calculate top k loss for pixelwise loss
         :param loss: element of pixelwise loss list
@@ -24,17 +25,17 @@ class TopK:
         :return: top k loss
         """
         # convert to tensor
-        loss = torch.from_numpy(loss)
+        # loss = torch.from_numpy(loss)
         # stick all tensors in one long tensor
-        flat_loss = loss.view(-1)
+        flat_loss = loss.view(loss.shape[0], -1)
         # find the top k losses
-        top_loss = torch.topk(flat_loss, k=k, dim=-1, largest=True, sorted=False)
-        if self.reduce_to_mean:
+        top_loss = torch.topk(flat_loss, k=k, dim=1, largest=True, sorted=False)
+        if reduce_to_mean:
             # calculate mean out of top k losses
-            score = torch.mean(top_loss.values, dim=-1).item()
+            score = torch.mean(top_loss.values, dim=1).to('cpu').numpy()
         else:
             # sum up the losses
-            score = torch.sum(top_loss.values)
+            score = torch.sum(top_loss.values, dim=1).to('cpu').numpy()
         return score
 
     def get_topk(self, k):
@@ -42,7 +43,7 @@ class TopK:
         calculate list of topk
         :return: list of top k lost
         """
-        loss_topk = [self.calculate_topk(loss=elem, k=k) for elem in self.loss]
+        loss_topk = [self.calculate(loss=elem, k=k, reduce_to_mean=self.reduce_to_mean) for elem in self.loss]
         return loss_topk
 
     def get_range_topk_auc(self, start, end, step, label):
@@ -101,6 +102,21 @@ class TopK:
         fig.update_layout(title_text='Distribution of Losses')
 
         return fig
+
+
+class MSE:
+    """calculate mean SE for an element of pixelwise losses"""
+
+    # Scores, based on
+    @staticmethod
+    def calculate(loss, masked_loss, mask=None):
+        if masked_loss:
+            sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
+            sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
+            score_mse = sum_loss / sum_mask
+        else:
+            score_mse = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
+        return score_mse
 
 # # Example:
 # import os

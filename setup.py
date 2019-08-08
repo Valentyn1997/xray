@@ -5,6 +5,6 @@ setup(
     packages=find_packages(),
     version='0.1.0',
     description='Anomaly Detection in X-Ray Images Unsupervised learning task',
-    author='random_state42',
+    author='random_state=42',
     license='',
 )

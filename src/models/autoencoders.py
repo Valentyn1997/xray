@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -5,12 +6,12 @@ import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from tqdm import tqdm
 
-from src import TMP_IMAGES_DIR
+from src import TMP_IMAGES_DIR, TOP_K
+from src.models.outlier_scoring import TopK, MSE
 from src.models.torchsummary import summary
-from src.utils import save_model
+from src.utils import save_model, log_artifact, calculate_metrics
 
 
 class MaskedMSELoss(nn.Module):
@@ -101,9 +102,12 @@ class BaselineAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
-    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
+                                   is_remote=False):
         """
         Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
+        :param is_remote:
+        :param to_mlflow:
         :param inp_image: Image for evaluation
         :param label: Label of image
         :param epoch: Epoch
@@ -122,12 +126,15 @@ class BaselineAutoencoder(nn.Module):
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
             ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
             ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
+            path = f'{path}/epoch{epoch}_label{int(label)}.png'
+            plt.savefig(path)
             plt.close(fig)
 
-        return output
+            if to_mlflow:
+                log_artifact(path, 'images', is_remote=is_remote)
+                os.remove(path)
 
-    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
+    def evaluate(self, loader, log_to_mlflow=False):
         """
         Evaluates model on given validation test subset
         :param loader: DataLoader of validation/test
@@ -138,58 +145,35 @@ class BaselineAutoencoder(nn.Module):
         """
 
         # Extracting optimal threshold
-        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
+        # opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
 
         # Evaluation mode
         self.eval()
+        scores_mse = []
+        scores_mse_top_k = []
+        true_labels = []
+
         with torch.no_grad():
-            scores = []
-            true_labels = []
-            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+            for batch_data in tqdm(loader, desc='Validation', total=len(loader)):
                 # Format input batch
                 inp = batch_data['image'].to(self.device)
                 mask = batch_data['mask'].to(self.device)
+                labels = batch_data['label']
 
                 # Forward pass
                 output = self(inp)
                 loss = self.outer_loss(output, inp, mask) if self.masked_loss_on_val else self.outer_loss(output, inp)
 
-                # Scores, based on MSE - higher MSE correspond to abnormal image
-                if self.masked_loss_on_val:
-                    sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    score = sum_loss / sum_mask
-                else:
-                    score = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
+                score_mse = MSE.calculate(loss, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_top_k = TopK.calculate(loss, TOP_K, reduce_to_mean=True)
 
-                scores.extend(score)
-                true_labels.extend(batch_data['label'].numpy())
+                scores_mse_top_k.extend(score_top_k)
+                scores_mse.extend(score_mse)
+                true_labels.extend(labels.numpy())
 
-        scores = np.array(scores)
-        true_labels = np.array(true_labels)
-
-        # ROC-AUC
-        roc_auc = roc_auc_score(true_labels, scores)
-        # Mean score on validation
-        mse = scores.mean()
-        # F1-score & optimal threshold
-        if opt_threshold is None:  # validation
-            precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores)
-            f1_scores = (2 * precision * recall / (precision + recall))
-            f1 = np.nanmax(f1_scores)
-            opt_threshold = thresholds[np.argmax(f1_scores)]
-        else:  # testing
-            y_pred = (scores > opt_threshold).astype(int)
-            f1 = f1_score(y_true=true_labels, y_pred=y_pred)
-
-        print(f'ROC-AUC on {type}: {roc_auc}')
-        print(f'MSE on {type}: {mse}')
-        print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
-
-        metrics = {"roc-auc": roc_auc,
-                   "mse": mse,
-                   "f1-score": f1,
-                   "optimal mse threshold": opt_threshold}
+        metrics_mse = calculate_metrics(np.array(scores_mse), np.array(true_labels), 'mse')
+        metrics_top_k = calculate_metrics(np.array(scores_mse_top_k), np.array(true_labels), 'mse_top_k')
+        metrics = {**metrics_mse, **metrics_top_k}
 
         if log_to_mlflow:
             for (metric, value) in metrics.items():
@@ -232,8 +216,8 @@ class BaselineAutoencoder(nn.Module):
         model_summary, trainable_params = summary(self, input_size=(1, *image_resolution), device=self.device)
         return trainable_params
 
-    def save_to_mlflow(self):
-        save_model(self, log_to_mlflow=True)
+    def save_to_mlflow(self, is_remote=False):
+        save_model(self, log_to_mlflow=True, is_remote=is_remote)
 
 
 class BottleneckAutoencoder(BaselineAutoencoder):

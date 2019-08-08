@@ -85,10 +85,9 @@ class SpectralNorm(nn.Module):
 
 
 class Generator(nn.Module):
-    d_z = 2048
-
+    z_dim = None
     def __init__(self,
-                 decoder_in_chanels: List[int] = (d_z, 1024, 512, 256, 128, 64, 32, 16),
+                 decoder_in_chanels: List[int] = (z_dim, 1024, 512, 256, 128, 64, 32, 16),
                  decoder_out_chanels: List[int] = (1024, 512, 256, 128, 64, 32, 16, 1),
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 2, 2, 2),
@@ -173,7 +172,7 @@ class Discriminator(nn.Module):
 class DCGAN(nn.Module):
 
     def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
-                 soft_labels=True, dlr=0.00005, glr=0.001, soft_delta=0.1, *args, **kwargs):
+                 soft_labels=True, dlr=0.00005, glr=0.001, soft_delta=0.1, z_dim=2048, *args, **kwargs):
         super(DCGAN, self).__init__()
 
         self.hyper_parameters = locals()
@@ -181,7 +180,8 @@ class DCGAN(nn.Module):
         self.device = device
 
         self.soft_labels = soft_labels
-        self.d_z = Generator.d_z
+        Generator.z_dim = z_dim
+        self.z_dim = z_dim
         self.generator = Generator(batch_normalisation=batch_normalisation,
                                    spectral_normalisation=spectral_normalisation)
         self.discriminator = Discriminator(batch_normalisation=batch_normalisation,
@@ -193,7 +193,7 @@ class DCGAN(nn.Module):
         weights_init(self.discriminator)
 
         # Create batch of latent vectors that we will use to visualize the progression of the generator
-        self.fixed_noise = torch.randn(32, self.d_z, 1, 1, device=self.device)
+        self.fixed_noise = torch.randn(32, self.z_dim, 1, 1, device=self.device)
 
         # Establish convention for real and fake labels during training
         self.real_label = 0
@@ -234,7 +234,7 @@ class DCGAN(nn.Module):
         :return: number of trainable parameters
         """
         print('Generator:')
-        model_summary, trainable_paramsG = summary(self.generator, input_size=(self.d_z, 1, 1), device=self.device)
+        model_summary, trainable_paramsG = summary(self.generator, input_size=(self.z_dim, 1, 1), device=self.device)
         print('Discriminator:')
         model_summary, trainable_paramsD = summary(self.discriminator, input_size=(1, *image_resolution),
                                                    device=self.device)
@@ -255,7 +255,7 @@ class DCGAN(nn.Module):
         # Format input batch
         real_inp = batch_data['image'].to(self.device)  # Real images
         b_size = real_inp.size(0)  # Batch size
-        noise_inp = torch.randn(b_size, self.d_z, 1, 1, device=self.device)  # Noise for generator
+        noise_inp = torch.randn(b_size, self.z_dim, 1, 1, device=self.device)  # Noise for generator
         label = torch.full((b_size,), self.real_label, device=self.device)  # Real labels vector
         if self.soft_labels:
             label += self.real_labels_softener.sample((b_size,)).to(self.device)

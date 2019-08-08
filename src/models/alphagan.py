@@ -325,7 +325,7 @@ class Codescriminator(nn.Module):
 class AlphaGan(nn.Module):
     def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
                  soft_labels=True, dlr=0.00005, gelr=0.001, soft_delta=0.1, z_dim=100,
-                 adv_loss='hinge', masked_loss_on_val=True, image_size=(512, 512), *args, **kwargs):
+                 adv_loss='hinge', masked_loss_on_val=True, image_resolution=(512, 512), *args, **kwargs):
         super(AlphaGan, self).__init__()
 
         self.hyper_parameters = locals()
@@ -334,9 +334,9 @@ class AlphaGan(nn.Module):
         self.d_z = z_dim
         self.adv_loss = adv_loss
 
-        self.generator = Generator(image_size=image_size[0], z_dim=self.d_z)
-        self.discriminator = Discriminator(image_size=image_size[0], z_dim=self.d_z)
-        self.encoder = Encoder(image_size=image_size[0], z_dim=self.d_z)
+        self.generator = Generator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.discriminator = Discriminator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.encoder = Encoder(image_size=image_resolution[0], z_dim=self.d_z)
         self.codescriminator = Codescriminator(z_dim=self.d_z)
         self.hyper_parameters['discriminator'] = self.discriminator.hyper_parameters
         self.hyper_parameters['generator'] = self.generator.hyper_parameters
@@ -596,7 +596,7 @@ class AlphaGan(nn.Module):
     def save_to_mlflow(self):
         save_model(self, log_to_mlflow=True)
 
-    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, log_to_mlflow=True):
         """
         Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
         :param inp_image: Image for evaluation

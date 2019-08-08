@@ -316,7 +316,7 @@ class Discriminator(nn.Module):
 class SAGAN(nn.Module):
     def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
                  soft_labels=True, dlr=0.00005, gelr=0.001, soft_delta=0.1, z_dim=100,
-                 adv_loss='hinge', masked_loss_on_val=True, image_size=(512, 512), *args, **kwargs):
+                 adv_loss='hinge', masked_loss_on_val=True, image_resolution=(512, 512), *args, **kwargs):
         super(SAGAN, self).__init__()
 
         self.hyper_parameters = locals()
@@ -325,9 +325,9 @@ class SAGAN(nn.Module):
         self.d_z = z_dim
         self.adv_loss = adv_loss
 
-        self.generator = Generator(image_size=image_size[0], z_dim=self.d_z)
-        self.discriminator = Discriminator(image_size=image_size[0], z_dim=self.d_z)
-        self.encoder = Encoder(image_size=image_size[0], z_dim=self.d_z)
+        self.generator = Generator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.discriminator = Discriminator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.encoder = Encoder(image_size=image_resolution[0], z_dim=self.d_z)
         self.hyper_parameters['discriminator'] = self.discriminator.hyper_parameters
         self.hyper_parameters['generator'] = self.generator.hyper_parameters
         self.hyper_parameters['encoder'] = self.encoder.hyper_parameters
