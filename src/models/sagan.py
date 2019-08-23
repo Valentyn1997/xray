@@ -1,19 +1,21 @@
 import itertools
+import os
 
+import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score, average_precision_score
 from torch.autograd import Variable
 from tqdm import tqdm
 
-from src import TMP_IMAGES_DIR
+from src import TMP_IMAGES_DIR, TOP_K
 from src.models.autoencoders import MaskedMSELoss
 from src.models.gans import SpectralNorm
+from src.models.outlier_scoring import Mean, TopK
 from src.models.torchsummary import summary
-from src.utils import save_model
+from src.utils import save_model, log_artifact, calculate_metrics
 
 
 class Self_Attn(nn.Module):
@@ -305,6 +307,8 @@ class Discriminator(nn.Module):
         x5 = self.last(x4)
 
         # Inference z
+        if len(z.shape) == 1:
+            z = z.view(1, z.size(0))
         z = z.view(z.size(0), z.size(1), 1, 1)
         out_z = self.infer_z(z)
 
@@ -314,8 +318,7 @@ class Discriminator(nn.Module):
 
 
 class SAGAN(nn.Module):
-    def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
-                 soft_labels=True, dlr=0.00005, gelr=0.001, soft_delta=0.1, z_dim=100,
+    def __init__(self, device, dlr=0.00005, gelr=0.001, z_dim=100,
                  adv_loss='hinge', masked_loss_on_val=True, image_resolution=(512, 512), *args, **kwargs):
         super(SAGAN, self).__init__()
 
@@ -350,6 +353,11 @@ class SAGAN(nn.Module):
         # Placeholders for losses of disriminator and generator
         self.ge_loss = None
         self.d_loss = None
+
+    def parallelize(self):
+        self.generator = nn.DataParallel(self.generator)
+        self.discriminator = nn.DataParallel(self.discriminator)
+        self.encoder = nn.DataParallel(self.encoder)
 
     def to(self, *args, **kwargs):
         self.generator.to(*args, **kwargs)
@@ -401,9 +409,9 @@ class SAGAN(nn.Module):
         fake_z = Variable(torch.randn(real_images.size(0), self.d_z)).to(self.device)  # Noise for generator
 
         noise1 = torch.Tensor(real_images.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
-                epoch + 1)).cuda()  # Noise for real images
+                epoch + 1)).to(self.device)  # Noise for real images
         noise2 = torch.Tensor(real_images.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
-                epoch + 1)).cuda()  # Noise for fake images
+                epoch + 1)).to(self.device)  # Noise for fake images
 
         real_z, _, _ = self.encoder(real_images)  # Encoding real images
 
@@ -473,20 +481,57 @@ class SAGAN(nn.Module):
         return {'generator-encoder loss': float(self.ge_loss),
                 'discriminator loss': float(self.d_loss)}
 
-    def visualize_generator(self, epoch, *args, **kwargs):
+    def visualize_generator(self, epoch, path=TMP_IMAGES_DIR, to_mlflow=False, is_remote=False, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
-        path = TMP_IMAGES_DIR
         # Evaluation mode
         self.generator.eval()
 
         with torch.no_grad():
             fake = self.generator(self.fixed_noise)[0].detach().cpu()
-        img = vutils.make_grid(fake, padding=20, normalize=False)
-        img_path = f'{path}/epoch{epoch}.png'
-        vutils.save_image(img, img_path)
-        mlflow.log_artifact(img_path)
+            img = vutils.make_grid(fake, padding=20, normalize=False)
+            img_path = f'{path}/epoch{epoch}.png'
+            vutils.save_image(img, img_path)
 
-    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
+            if to_mlflow:
+                log_artifact(img_path, 'images', is_remote=is_remote)
+                os.remove(img_path)
+
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
+                                   is_remote=False):
+        """
+        Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
+        :param is_remote:
+        :param to_mlflow:
+        :param inp_image: Image for evaluation
+        :param label: Label of image
+        :param epoch: Epoch
+        :param path: Path to save image to
+        """
+        # Evaluation mode
+        self.eval()
+        with torch.no_grad():
+            # Format input batch
+            inp = inp_image.to(self.device)
+
+            # Forward pass
+            real_z, _, _ = self.encoder(inp)
+            if len(real_z.size()) == 1:
+                real_z = real_z.view(1, real_z.size(0))
+            reconstructed_img, _, _ = self.generator(real_z)
+            output_img = reconstructed_img.to('cpu')
+
+            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            path = f'{path}/epoch{epoch}_label{int(label)}.png'
+            plt.savefig(path)
+            plt.close(fig)
+
+            if to_mlflow:
+                log_artifact(path, 'images', is_remote=is_remote)
+                os.remove(path)
+
+    def evaluate(self, loader, log_to_mlflow=False):
         """
         Evaluates discriminator on given validation test subset
         :param loader: DataLoader of validation/test
@@ -495,19 +540,18 @@ class SAGAN(nn.Module):
         :param val_metrics: For :param type = 'test' only. Metrcis should contain optimal threshold
         :return: Dict of calculated metrics
         """
-        # Extracting optimal threshold
-        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
 
         # Evaluation mode
         self.generator.eval()
         self.encoder.eval()
         self.discriminator.eval()
-        with torch.no_grad():
-            scores_mse = []
-            scores_proba = []
 
-            true_labels = []
-            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+        scores_mse = []
+        scores_proba = []
+        scores_top_k = []
+        true_labels = []
+        with torch.no_grad():
+            for batch_data in tqdm(loader, desc='Validation', total=len(loader)):
                 # Format input batch
                 inp = batch_data['image'].to(self.device)
                 mask = batch_data['mask'].to(self.device)
@@ -522,60 +566,20 @@ class SAGAN(nn.Module):
                     else self.outer_loss(reconstructed_img, inp)
 
                 # Scores, based on output of discriminator - Higher score must correspond to positive labeled images
-                proba = self.discriminator(inp, real_z)[0].to('cpu').numpy().reshape(-1)
+                score_proba = 1 - self.discriminator(inp, real_z)[0].to('cpu').numpy().reshape(-1)
 
-                # Scores, based on MSE - higher MSE correspond to abnormal image
-                if self.masked_loss_on_val:
-                    sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    score = sum_loss / sum_mask
-                else:
-                    score = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
+                score_mse = Mean.calculate(loss, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_top_k = TopK.calculate(loss, TOP_K, reduce_to_mean=True)
 
-                scores_mse.extend(score)
-                scores_proba.extend(proba)
+                scores_mse.extend(score_mse)
+                scores_top_k.extend(score_top_k)
+                scores_proba.extend(score_proba)
                 true_labels.extend(batch_data['label'].numpy())
 
-            scores_mse = np.array(scores_mse)
-            scores_proba = np.array(scores_proba)
-            true_labels = np.array(true_labels)
-
-            # ROC-AUC
-            roc_auc_mse = roc_auc_score(true_labels, scores_mse)
-            roc_auc_proba = roc_auc_score(true_labels, scores_proba)
-
-            # Average precision score
-            aps_mse = average_precision_score(true_labels, scores_mse)
-            aps_proba = average_precision_score(true_labels, scores_proba)
-
-            # Mean discriminator proba on validation batch
-            mse = scores_mse.mean()
-            proba = scores_proba.mean()
-
-            # F1-score & optimal threshold
-            if opt_threshold is None:  # validation
-                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores_mse)
-                f1_scores = (2 * precision * recall / (precision + recall))
-                f1 = np.nanmax(f1_scores)
-                opt_threshold = thresholds[np.argmax(f1_scores)]
-            else:  # testing
-                y_pred = (scores_mse > opt_threshold).astype(int)
-                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
-
-            print(f'ROC-AUC MSE on {type}: {roc_auc_mse}')
-            print(f'ROC-AUC discriminator proba on {type}: {roc_auc_proba}')
-            print(f'MSE on {type}: {mse}')
-            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
-
-            metrics = {"d_loss_train": float(self.d_loss),
-                       "ge_loss_train": float(self.ge_loss),
-                       "roc-auc_mse": roc_auc_mse,
-                       "roc-auc_proba": roc_auc_proba,
-                       "aps_mse": aps_mse,
-                       "aps_proba": aps_proba,
-                       "mse": mse,
-                       "f1-score": f1,
-                       "optimal mse threshold": opt_threshold}
+            metrics_mse = calculate_metrics(np.array(scores_mse), np.array(true_labels), 'mse')
+            metrics_mse_top_k = calculate_metrics(np.array(scores_top_k), np.array(true_labels), 'mse_top_k')
+            metrics_proba = calculate_metrics(np.array(scores_proba), np.array(true_labels), 'proba')
+            metrics = {**metrics_mse, **metrics_mse_top_k, **metrics_proba}
 
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
@@ -583,5 +587,5 @@ class SAGAN(nn.Module):
 
             return metrics
 
-    def save_to_mlflow(self):
-        save_model(self, log_to_mlflow=True)
+    def save_to_mlflow(self, is_remote=False):
+        save_model(self, log_to_mlflow=True, is_remote=is_remote)

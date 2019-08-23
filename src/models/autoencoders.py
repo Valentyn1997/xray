@@ -9,7 +9,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR, TOP_K
-from src.models.outlier_scoring import TopK, MSE
+from src.models.outlier_scoring import TopK, Mean
 from src.models.torchsummary import summary
 from src.utils import save_model, log_artifact, calculate_metrics
 
@@ -138,14 +138,9 @@ class BaselineAutoencoder(nn.Module):
         """
         Evaluates model on given validation test subset
         :param loader: DataLoader of validation/test
-        :param type: 'validation' or 'test'
         :param log_to_mlflow: Log metrics to Mlflow
-        :param val_metrics: For :param type = 'test' only. Metrcis should contain optimal threshold
         :return: Dict of calculated metrics
         """
-
-        # Extracting optimal threshold
-        # opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
 
         # Evaluation mode
         self.eval()
@@ -164,7 +159,7 @@ class BaselineAutoencoder(nn.Module):
                 output = self(inp)
                 loss = self.outer_loss(output, inp, mask) if self.masked_loss_on_val else self.outer_loss(output, inp)
 
-                score_mse = MSE.calculate(loss, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_mse = Mean.calculate(loss, masked_loss=self.masked_loss_on_val, mask=mask)
                 score_top_k = TopK.calculate(loss, TOP_K, reduce_to_mean=True)
 
                 scores_mse_top_k.extend(score_top_k)
@@ -355,7 +350,7 @@ class SkipConnection(BottleneckAutoencoder):
             self.decoder_layers)
 
         # Optimizer
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
     def forward(self, x):
         maxpool_ind = []

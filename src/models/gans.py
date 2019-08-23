@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import mlflow
@@ -5,14 +6,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score, average_precision_score
 from torch.distributions.uniform import Uniform
 from torch.nn import Parameter
 from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR
 from src.models.torchsummary import summary
-from src.utils import save_model
+from src.utils import save_model, log_artifact, calculate_metrics
 
 
 # custom weights initialization called on discriminator and generator
@@ -85,9 +85,9 @@ class SpectralNorm(nn.Module):
 
 
 class Generator(nn.Module):
-    z_dim = None
     def __init__(self,
-                 decoder_in_chanels: List[int] = (z_dim, 1024, 512, 256, 128, 64, 32, 16),
+                 z_dim=2048,
+                 decoder_in_chanels: List[int] = (None, 1024, 512, 256, 128, 64, 32, 16),
                  decoder_out_chanels: List[int] = (1024, 512, 256, 128, 64, 32, 16, 1),
                  decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 2, 2, 2),
@@ -103,7 +103,8 @@ class Generator(nn.Module):
         # Decoder initialization
         self.decoder_layers = []
         for i in range(len(decoder_in_chanels)):
-            trans_conv = nn.ConvTranspose2d(decoder_in_chanels[i], decoder_out_chanels[i],
+            decoder_in_chanel = z_dim if i == 0 else decoder_in_chanels[i]
+            trans_conv = nn.ConvTranspose2d(decoder_in_chanel, decoder_out_chanels[i],
                                             kernel_size=decoder_kernel_sizes[i],
                                             stride=decoder_strides[i],
                                             padding=decoder_paddings[i],
@@ -297,7 +298,7 @@ class DCGAN(nn.Module):
         return {'generator loss': float(self.loss_G),
                 'discriminator loss': float(self.loss_D)}
 
-    def visualize_generator(self, epoch, *args, **kwargs):
+    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         path = TMP_IMAGES_DIR
         # Evaluation mode
@@ -306,9 +307,14 @@ class DCGAN(nn.Module):
         with torch.no_grad():
             fake = self.generator(self.fixed_noise).detach().cpu()
         img = vutils.make_grid(fake, padding=20, normalize=False)
-        vutils.save_image(img, f'{path}/epoch{epoch}.png')
+        path = f'{path}/epoch{epoch}.png'
+        vutils.save_image(img, path)
 
-    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
+        if to_mlflow:
+            log_artifact(path, 'images', is_remote=is_remote)
+            os.remove(path)
+
+    def evaluate(self, loader, log_to_mlflow=False):
         """
         Evaluates discriminator on given validation test subset
         :param loader: DataLoader of validation/test
@@ -317,15 +323,13 @@ class DCGAN(nn.Module):
         :param val_metrics: For :param type = 'test' only. Metrcis should contain optimal threshold
         :return: Dict of calculated metrics
         """
-        # Extracting optimal threshold
-        opt_threshold = val_metrics['optimal discriminator_proba threshold'] if val_metrics is not None else None
 
         # Evaluation mode
         self.discriminator.eval()
         with torch.no_grad():
             scores = []
             true_labels = []
-            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+            for batch_data in tqdm(loader, desc='Validation', total=len(loader)):
                 # Format input batch
                 inp = batch_data['image'].to(self.device)
 
@@ -333,43 +337,12 @@ class DCGAN(nn.Module):
                 output = self.discriminator(inp).to('cpu').numpy().reshape(-1)
 
                 # Scores, based on output of discriminator - Higher score must correspond to positive labeled images
-                score = output if bool(self.real_label) else 1 - output
+                score = output if bool(self.fake_label) else 1 - output
 
                 scores.extend(score)
                 true_labels.extend(batch_data['label'].numpy())
 
-            scores = np.array(scores)
-            true_labels = np.array(true_labels)
-
-            # ROC-AUC
-            roc_auc = roc_auc_score(true_labels, scores)
-
-            # APS
-            aps = average_precision_score(true_labels, scores)
-
-            # Mean discriminator proba on validation batch
-            discriminator_proba = scores.mean()
-            # F1-score & optimal threshold
-            if opt_threshold is None:  # validation
-                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores)
-                f1_scores = (2 * precision * recall / (precision + recall))
-                f1 = np.nanmax(f1_scores)
-                opt_threshold = thresholds[np.argmax(f1_scores)]
-            else:  # testing
-                y_pred = (scores > opt_threshold).astype(int)
-                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
-
-            print(f'ROC-AUC on {type}: {roc_auc}')
-            print(f'Discriminator proba on {type}: {discriminator_proba}')
-            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
-
-            metrics = {"d_loss_train": self.loss_D,
-                       "g_loss_train": self.loss_G,
-                       "roc-auc": roc_auc,
-                       "aps": aps,
-                       "discriminator_proba": discriminator_proba,
-                       "f1-score": f1,
-                       "optimal discriminator_proba threshold": opt_threshold}
+            metrics = calculate_metrics(np.array(scores), np.array(true_labels), 'proba')
 
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
@@ -377,5 +350,5 @@ class DCGAN(nn.Module):
 
             return metrics
 
-    def save_to_mlflow(self):
-        save_model(self, log_to_mlflow=True)
+    def save_to_mlflow(self, is_remote):
+        save_model(self, log_to_mlflow=True, is_remote=is_remote)

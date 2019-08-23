@@ -104,7 +104,7 @@ class TopK:
         return fig
 
 
-class MSE:
+class Mean:
     """calculate mean SE for an element of pixelwise losses"""
 
     # Scores, based on
@@ -113,10 +113,10 @@ class MSE:
         if masked_loss:
             sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
             sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
-            score_mse = sum_loss / sum_mask
+            score_mean = sum_loss / sum_mask
         else:
-            score_mse = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
-        return score_mse
+            score_mean = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
+        return score_mean
 
 # # Example:
 # import os

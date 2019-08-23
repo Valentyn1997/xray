@@ -3,6 +3,7 @@ from pprint import pprint
 
 import mlflow.pytorch
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
@@ -23,10 +24,12 @@ from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # set model type
-model_class = BaselineAutoencoder
+model_class = SAGAN
 
 # set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
+torch.cuda.empty_cache()
+# torch.cuda.set_device(1)
 # device = 'cpu'
 # set number of cpu kernels for data processing
 num_workers = 12
@@ -37,12 +40,13 @@ remote_run = query_yes_no('Is this run remote?', 'no')
 if log_to_mlflow:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(model_class.__name__ + 'New')
-    mlflow.start_run(nested=False)
+    mlflow.start_run(run_id='553225ba44224347a60a34154e9f7ecf')
 
 # Ignoring numpy warnings
 np.seterr(divide='ignore', invalid='ignore')
 
 run_params = {**COMMON_PARAMS, **MODEL_SPECIFIC_PARAMS[model_class.__name__]}
+test_metrics = []
 
 for random_seed in run_params['random_seed']:
 
@@ -101,7 +105,14 @@ for random_seed in run_params['random_seed']:
     test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
 
     # Model initialization
-    model = model_class(device=device, **run_params).to(device)
+    model = model_class(device=device, **run_params)
+
+    # Parallelism
+    if torch.cuda.device_count() > 1:
+        model.parallelize()
+
+    model = model.to(device)
+
     # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
     # model.eval().to(device)
     print(f'\nMODEL ARCHITECTURE:')
@@ -151,14 +162,15 @@ for random_seed in run_params['random_seed']:
             model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0),
                                              validation[index]['label'], epoch, to_mlflow=log_to_mlflow,
                                              is_remote=remote_run)
-        elif model_class in [DCGAN] and epoch % 3 == 0:
+        elif model_class in [DCGAN] and epoch % 4 == 0:
             # evaluate performance of generator
-            model.visualize_generator(epoch)
+            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run)
         elif model_class in [AlphaGan, SAGAN] and epoch % 2 == 0:
             # evaluate performance of generator
-            model.visualize_generator(epoch)
+            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run)
             # evaluate performance of encoder / generator
-            model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch)
+            model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch,
+                                             to_mlflow=log_to_mlflow, is_remote=remote_run)
 
         # Checkpoints
         if 'checkpoint_frequency' in run_params and epoch % run_params['checkpoint_frequency'] == 0:
@@ -167,10 +179,17 @@ for random_seed in run_params['random_seed']:
     print('=========Training ended==========')
 
     # Test performance
-    model.evaluate(test_loader, log_to_mlflow=log_to_mlflow)
+    test_metric = model.evaluate(test_loader, log_to_mlflow=log_to_mlflow)
+    test_metrics.append(test_metric)
 
     # Saving
     save_model(model, log_to_mlflow=log_to_mlflow, is_remote=remote_run)
     mlflow.end_run()
+
+# Averaging metrics for different random-seeds
+avg_metric = dict(pd.DataFrame(test_metrics).mean())
+if log_to_mlflow:
+    for (metric, value) in avg_metric.items():
+        mlflow.log_metric(metric, value)
 
 mlflow.end_run()
