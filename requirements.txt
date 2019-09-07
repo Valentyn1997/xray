@@ -1,3 +1,5 @@
+torchgan
+paramiko
 scikit-image
 torchvision
 mlflow

@@ -78,10 +78,19 @@ class HistEqualisation(object):
 
 
 class MinMaxNormalization(object):
-    """Normalizes image pixels to [0, 1] interval"""
+    """Normalizes image pixels to [-1, 1] interval"""
+
+    def __init__(self, v_min: int = 0, v_max: int = 1):
+        """
+        Initialization
+        :param active: no equalisation, when False
+        """
+        self.v_min = v_min
+        self.v_max = v_max
 
     def __call__(self, sample):
         sample['image'] = (sample['image'] - np.min(sample['image'])) / (np.max(sample['image']) - np.min(sample['image']))
+        sample['image'] = (self.v_max - self.v_min) * sample['image'] + self.v_min
         return sample
 
 

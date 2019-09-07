@@ -1,22 +1,24 @@
-import cv2
 import glob
+import re
+
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import re
 from sklearn.model_selection import GroupShuffleSplit
 from torch.utils.data import Dataset
 
 
 class TrainValTestSplitter:
 
-    def __init__(self, path_to_data, show_labels_dist=False):
+    def __init__(self, path_to_data, show_labels_dist=False, random_state=42):
         """
         Train-validation-test splitter, stores all the filenames
         :param path_to_data: for glob.glob to find all the images path
         :param show_labels_dist: show plot of distributions of labels
         """
         path_to_data = f'{path_to_data}/*/*/*'
+        self.random_state = random_state
         self.data = pd.DataFrame()
         self.data['path'] = glob.glob(path_to_data)
         self.data['label'] = self.data['path'].apply(lambda path: len(re.findall('positive', path)))
@@ -38,7 +40,7 @@ class TrainValTestSplitter:
         Creates data_train, data_val, data_test dataframes with filenames
         """
         # train | validate test split
-        splitter = GroupShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
+        splitter = GroupShuffleSplit(n_splits=1, test_size=0.3, random_state=self.random_state)
         negative_data = self.data[self.data.label == 0]
         generator = splitter.split(negative_data.label, groups=negative_data['patient'])
         idx_train, idx_validate_test = next(generator)
@@ -49,7 +51,7 @@ class TrainValTestSplitter:
 
         # validate | test split
         data_val_test = pd.concat([self.data[self.data.label == 1], self.data.iloc[negative_data.iloc[idx_validate_test, :].index]])
-        splitter = GroupShuffleSplit(n_splits=1, test_size=0.50, random_state=42)
+        splitter = GroupShuffleSplit(n_splits=1, test_size=0.50, random_state=self.random_state)
         generator = splitter.split(data_val_test.label, groups=data_val_test['patient'])
         idx_val, idx_test = next(generator)
 

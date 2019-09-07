@@ -1,17 +1,21 @@
+import os
+
 import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from torch.autograd import Variable
+from torchgan.layers import MinibatchDiscrimination1d
 from tqdm import tqdm
 
-from src import TMP_IMAGES_DIR
+from src import TMP_IMAGES_DIR, TOP_K
 from src.models.autoencoders import MaskedMSELoss
 from src.models.gans import SpectralNorm
+from src.models.outlier_scoring import Mean, TopK
 from src.models.torchsummary import summary
+from src.utils import save_model, log_artifact, calculate_metrics
 
 
 class Self_Attn(nn.Module):
@@ -254,6 +258,7 @@ class Discriminator(nn.Module):
         self.l1 = nn.Sequential(*layer1)
         self.l2 = nn.Sequential(*layer2)
         self.l3 = nn.Sequential(*layer3)
+        self.minibatch_discrimination = MinibatchDiscrimination1d(in_features=curr_dim, out_features=curr_dim)
 
         last.append(SpectralNorm(nn.Conv2d(curr_dim, 1, 4)))
         last.append(nn.Sigmoid())
@@ -275,6 +280,8 @@ class Discriminator(nn.Module):
         x3, p1 = self.attn1(x)
         x = self.l5(x3)
         x4, p2 = self.attn2(x)
+        # batch_data = self.minibatch_discrimination(x4)
+        # x4 = torch.cat(x4, batch_data)
         x5 = self.last(x4)
 
         return x5.squeeze(), x4, x3, p1, p2
@@ -300,42 +307,40 @@ class Codescriminator(nn.Module):
         layer2.append(nn.Linear(curr_dim * 2, curr_dim))
         layer2.append(nn.LeakyReLU(0.1))
 
-        curr_dim = int(curr_dim / 2)
-        layer3.append(nn.Linear(curr_dim * 2, curr_dim))
-        layer3.append(nn.LeakyReLU(0.1))
+        # curr_dim = int(curr_dim / 2)
+        # layer3.append(nn.Linear(curr_dim * 2, curr_dim))
+        # layer3.append(nn.LeakyReLU(0.1))
 
         last.append(nn.Linear(curr_dim, 1))
         last.append(nn.Sigmoid())
 
         self.l1 = nn.Sequential(*layer1)
         self.l2 = nn.Sequential(*layer2)
-        self.l3 = nn.Sequential(*layer3)
+        # self.l3 = nn.Sequential(*layer3)
         self.last = nn.Sequential(*last)
 
     def forward(self, x):
         x = self.l1(x.squeeze())
         x = self.l2(x)
-        x = self.l3(x)
+        # x = self.l3(x)
         x = self.last(x)
 
         return x.squeeze()
 
 
 class AlphaGan(nn.Module):
-    def __init__(self, device, batch_normalisation=True, spectral_normalisation=True,
-                 soft_labels=True, dlr=0.00005, gelr=0.001, soft_delta=0.1, z_dim=100,
-                 adv_loss='hinge', masked_loss_on_val=True, image_size=(512, 512), *args, **kwargs):
+    def __init__(self, device, dlr=0.00005, gelr=0.001, z_dim=100, masked_loss_on_val=True,
+                 image_resolution=(128, 128), *args, **kwargs):
         super(AlphaGan, self).__init__()
 
         self.hyper_parameters = locals()
         self.hyper_parameters.pop('self')
         self.device = device
         self.d_z = z_dim
-        self.adv_loss = adv_loss
 
-        self.generator = Generator(image_size=image_size[0], z_dim=self.d_z)
-        self.discriminator = Discriminator(image_size=image_size[0], z_dim=self.d_z)
-        self.encoder = Encoder(image_size=image_size[0], z_dim=self.d_z)
+        self.generator = Generator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.discriminator = Discriminator(image_size=image_resolution[0], z_dim=self.d_z)
+        self.encoder = Encoder(image_size=image_resolution[0], z_dim=self.d_z)
         self.codescriminator = Codescriminator(z_dim=self.d_z)
         self.hyper_parameters['discriminator'] = self.discriminator.hyper_parameters
         self.hyper_parameters['generator'] = self.generator.hyper_parameters
@@ -360,7 +365,8 @@ class AlphaGan(nn.Module):
                                             (0.5, 0.999))
         self.d_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.discriminator.parameters()), dlr,
                                             betas=(0.5, 0.999))
-        self.c_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.codescriminator.parameters()), dlr,
+        self.c_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.codescriminator.parameters()),
+                                            0.1 * dlr,
                                             betas=(0.5, 0.999))
 
         # Placeholders for losses of disriminator and generator
@@ -381,6 +387,12 @@ class AlphaGan(nn.Module):
             return self.discriminator(x)
         else:
             return self.generator(x)
+
+    def parallelize(self):
+        self.generator = nn.DataParallel(self.generator)
+        self.discriminator = nn.DataParallel(self.discriminator)
+        self.encoder = nn.DataParallel(self.encoder)
+        self.codescriminator = nn.DataParallel(self.codescriminator)
 
     def summary(self, image_resolution):
         """
@@ -485,7 +497,7 @@ class AlphaGan(nn.Module):
                 'discriminator loss': float(self.d_loss),
                 'codiscriminator loss': float(self.c_loss)}
 
-    def visualize_generator(self, epoch, *args, **kwargs):
+    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, vmin=0, vmax=1, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         path = TMP_IMAGES_DIR
         # Evaluation mode
@@ -493,10 +505,15 @@ class AlphaGan(nn.Module):
 
         with torch.no_grad():
             fake = self.generator(self.fixed_noise)[0].detach().cpu()
-        img = vutils.make_grid(fake, padding=20, normalize=False)
-        vutils.save_image(img, f'{path}/epoch{epoch}.png')
+            img = vutils.make_grid(fake, padding=20, normalize=False, range=(vmin, vmax))
+            path = f'{path}/epoch{epoch}.png'
+            vutils.save_image(img, path)
 
-    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
+            if to_mlflow:
+                log_artifact(path, 'images', is_remote=is_remote)
+                os.remove(path)
+
+    def evaluate(self, loader, log_to_mlflow=False):
         """
         Evaluates discriminator on given validation test subset
         :param loader: DataLoader of validation/test
@@ -505,19 +522,22 @@ class AlphaGan(nn.Module):
         :param val_metrics: For :param type = 'test' only. Metrcis should contain optimal threshold
         :return: Dict of calculated metrics
         """
-        # Extracting optimal threshold
-        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
 
         # Evaluation mode
         self.generator.eval()
         self.encoder.eval()
         self.discriminator.eval()
-        with torch.no_grad():
-            scores_mse = []
-            scores_proba = []
+        self.codescriminator.eval()
+        scores_mse = []
+        scores_proba = []
+        scores_coproba = []
+        scores_proba_coproba = []
+        scores_top_k = []
+        true_labels = []
 
-            true_labels = []
-            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+        with torch.no_grad():
+
+            for batch_data in tqdm(loader, desc='Validation', total=len(loader)):
                 # Format input batch
                 inp = batch_data['image'].to(self.device)
                 mask = batch_data['mask'].to(self.device)
@@ -534,50 +554,29 @@ class AlphaGan(nn.Module):
                     else self.outer_loss(x_rec, inp)
 
                 # Scores, based on output of discriminator - Higher score must correspond to positive labeled images
-                proba = self.discriminator(inp)[0].to('cpu').numpy().reshape(-1)
+                score_proba = 1 - self.discriminator(inp)[0].to('cpu').numpy().reshape(-1)
+                score_coproba = 1 - self.codescriminator(z_mean).to('cpu').numpy().reshape(-1)
+                score_proba_coproba = (score_proba + score_coproba) / 2
 
-                # Scores, based on MSE - higher MSE correspond to abnormal image
-                if self.masked_loss_on_val:
-                    sum_loss = loss.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    sum_mask = mask.to('cpu').numpy().sum(axis=(1, 2, 3))
-                    score = sum_loss / sum_mask
-                else:
-                    score = loss.to('cpu').numpy().mean(axis=(1, 2, 3))
+                score_mse = Mean.calculate(loss, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_top_k = TopK.calculate(loss, TOP_K, reduce_to_mean=True)
 
-                scores_mse.extend(score)
-                scores_proba.extend(proba)
+                scores_mse.extend(score_mse)
+                scores_top_k.extend(score_top_k)
+                scores_proba.extend(score_proba)
+                scores_coproba.extend(score_coproba)
+                scores_proba_coproba.extend(score_proba_coproba)
                 true_labels.extend(batch_data['label'].numpy())
 
-            scores_mse = np.array(scores_mse)
-            scores_proba = np.array(scores_proba)
-            true_labels = np.array(true_labels)
+            metrics_mse = calculate_metrics(np.array(scores_mse), np.array(true_labels), 'mse')
+            metrics_mse_top_k = calculate_metrics(np.array(scores_top_k), np.array(true_labels), 'mse_top_k')
+            metrics_proba = calculate_metrics(np.array(scores_proba), np.array(true_labels), 'proba')
+            metrics_coproba = calculate_metrics(np.array(scores_coproba), np.array(true_labels), 'coproba')
+            metrics_proba_coproba = calculate_metrics(np.array(scores_proba_coproba), np.array(true_labels),
+                                                      'proba_coproba')
 
-            # ROC-AUC
-            roc_auc_mse = roc_auc_score(true_labels, scores_mse)
-            roc_auc_proba = roc_auc_score(true_labels, scores_proba)
-            # Mean discriminator proba on validation batch
-            mse = scores_mse.mean()
-            proba = scores_proba.mean()
-            # F1-score & optimal threshold
-            if opt_threshold is None:  # validation
-                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=scores_mse)
-                f1_scores = (2 * precision * recall / (precision + recall))
-                f1 = np.nanmax(f1_scores)
-                opt_threshold = thresholds[np.argmax(f1_scores)]
-            else:  # testing
-                y_pred = (scores_mse > opt_threshold).astype(int)
-                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
+            metrics = {**metrics_mse, **metrics_mse_top_k, **metrics_proba, **metrics_coproba, **metrics_proba_coproba}
 
-            print(f'ROC-AUC MSE on {type}: {roc_auc_mse}')
-            print(f'ROC-AUC discriminator proba on {type}: {roc_auc_proba}')
-            print(f'MSE on {type}: {mse}')
-            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
-
-            metrics = {"roc-auc_mse": roc_auc_mse,
-                       "roc-auc_proba": roc_auc_proba,
-                       "mse": mse,
-                       "f1-score": f1,
-                       "optimal mse threshold": opt_threshold}
 
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
@@ -585,12 +584,11 @@ class AlphaGan(nn.Module):
 
             return metrics
 
-    def save_to_mlflow(self):
-        mlflow.pytorch.log_model(self.discriminator, f'{self.discriminator.__class__.__name__}')
-        mlflow.pytorch.log_model(self.encoder, f'{self.encoder.__class__.__name__}')
-        mlflow.pytorch.log_model(self.generator, f'{self.generator.__class__.__name__}')
+    def save_to_mlflow(self, is_remote=False):
+        save_model(self, log_to_mlflow=True, is_remote=is_remote)
 
-    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
+                                   is_remote=False, vmin=0, vmax=1):
         """
         Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
         :param inp_image: Image for evaluation
@@ -615,7 +613,12 @@ class AlphaGan(nn.Module):
             inp_image = inp_image.to('cpu')
             x_rec = x_rec.to('cpu')
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            ax[1].imshow(x_rec.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+            ax[1].imshow(x_rec.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+            path = f'{path}/epoch{epoch}_label{int(label)}.png'
+            plt.savefig(path)
             plt.close(fig)
+
+            if to_mlflow:
+                log_artifact(path, 'images', is_remote=is_remote)
+                os.remove(path)

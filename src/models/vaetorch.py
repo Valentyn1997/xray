@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -6,12 +7,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score
 from torch.autograd import Variable
 from tqdm import tqdm
 
-from src import TMP_IMAGES_DIR
+from src import TMP_IMAGES_DIR, TOP_K
 from src.models.autoencoders import BaselineAutoencoder
+from src.models.outlier_scoring import TopK, Mean
+from src.utils import log_artifact, calculate_metrics
 
 
 class Flatten(nn.Module):
@@ -22,6 +24,29 @@ class Flatten(nn.Module):
 class UnFlatten(nn.Module):
     def forward(self, input, size=512):
         return input.view(input.size(0), size, 6, 6)
+
+
+class MaskedL1Loss(nn.Module):
+    def __init__(self, reduction='mean'):
+        """
+        Masked L1 implementation
+        :param reduction: the same, as in nn.L1Loss
+        """
+        super(MaskedL1Loss, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, input, target, mask):
+        """
+        calculates masked loss
+        :param input: input image as array
+        :param target: reconstructed image as array
+        :param mask: mask of image as array
+        :return: masked loss
+        """
+        loss = F.smooth_l1_loss(input * mask, target * mask, reduction='none')
+        if self.reduction == 'mean':
+            loss = torch.sum(loss) / torch.sum(mask)
+        return loss
 
 
 class VAE(nn.Module):
@@ -40,6 +65,8 @@ class VAE(nn.Module):
                  batch_normalisation=True,
                  final_activation=nn.Sigmoid,
                  lr=1e-5,
+                 masked_loss_on_val=False,
+                 masked_loss_on_train=False,
                  *args, **kwargs):
         super(VAE, self).__init__()
 
@@ -78,6 +105,10 @@ class VAE(nn.Module):
         self.fc3 = nn.Linear(z_dim, h_dim)
         self.decoder = nn.Sequential(*self.decoder_layers)
 
+        # Losses
+        self.masked_loss_on_val = masked_loss_on_val
+        self.masked_loss_on_train = masked_loss_on_train
+
         # Optimizer
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
@@ -108,7 +139,7 @@ class VAE(nn.Module):
         return self.decoder(z), mu, var
 
     @staticmethod
-    def loss(recon_x, x, mu, var, reduction='mean'):
+    def loss(recon_x, x, mu, var, reduction='mean', mask=None):
         """
         Kullback Leibler divergence + Binary Cross Entropy combined loss
         :param recon_x: reconstructed image
@@ -146,7 +177,7 @@ class VAE(nn.Module):
         return MSE + KLD
 
     @staticmethod
-    def loss_L_one(recon_x, x, mu, var, reduction='mean'):
+    def loss_L1(recon_x, x, mu, var, reduction='mean', mask=None):
         """
         Kullback Leibler divergence + Smooth L1 combined loss
         :param recon_x: reconstructed image
@@ -157,12 +188,16 @@ class VAE(nn.Module):
         :return: loss
         """
         KLD = 0
-        L_one = F.smooth_l1_loss(recon_x, x, size_average=False, reduction=reduction)
+        if mask is not None:
+            L1 = MaskedL1Loss(reduction=reduction)(recon_x, x, mask)
+        else:
+            L1 = F.smooth_l1_loss(recon_x, x, reduction=reduction)
         if reduction == 'mean':
             KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
         elif reduction == 'none':
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
-        return L_one + KLD
+        # print(L1.shape, KLD.shape)
+        return L1, KLD
 
     @staticmethod
     def loss_pixel(recon_x, x):
@@ -174,65 +209,58 @@ class VAE(nn.Module):
         """
         return recon_x - x
 
-    def evaluate(self, loader, type, log_to_mlflow=False, val_metrics=None):
+    def evaluate(self, loader, log_to_mlflow=False):
         """
-        Computes ROC-AUC, F1-score, MSE and optimal threshold for model
+        Computes ROC-AUC, APS
         :param loader: data loader
-        :param type: test or validation evaluation
-        :param device: device type: CPU or CUDA GPU
         :param log_to_mlflow: boolean variable to enable logging
-        :param val_metrics: prespecified metrics, e.g optimal threshold
         :return: calculated metrics
         """
 
-        # Extracting optimal threshold
-        opt_threshold = val_metrics['optimal mse threshold'] if val_metrics is not None else None
-
         self.eval()
+        scores_l1 = []
+        scores_l1_top_k = []
+        scores_l1_kld = []
+        scores_l1_kld_top_k = []
+        true_labels = []
+
         with torch.no_grad():
-            losses = []
-            true_labels = []
-            for batch_data in tqdm(loader, desc=type, total=len(loader)):
+
+            for batch_data in tqdm(loader, desc='Validation', total=len(loader)):
                 inp = batch_data['image'].to(self.device)
+                mask = batch_data['mask'].to(self.device) if self.masked_loss_on_val else None
+                labels = batch_data['label']
 
                 # forward pass
                 output, mu, var = self(inp)
-                loss = self.loss(output, inp, mu, var, reduction='none')
-                losses.extend(loss.to('cpu').numpy().mean(axis=1))
-                true_labels.extend(batch_data['label'].numpy())
+                L1, KLD = self.loss_L1(output, inp, mu, var, reduction='none', mask=mask)
 
-            losses = np.array(losses)
-            true_labels = np.array(true_labels)
+                score_l1 = Mean.calculate(L1, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_l1_top_k = TopK.calculate(L1, TOP_K, reduce_to_mean=True)
+                score_l1_kl = score_l1 + KLD.to('cpu').numpy().sum(axis=1)
+                score_l1_kl_top_k = score_l1_top_k + KLD.to('cpu').numpy().sum(axis=1)
 
-            # ROC-AUC
-            roc_auc = roc_auc_score(true_labels, losses)
-            # MSE
-            mse = losses.mean()
-            # F1-score & optimal threshold
-            if opt_threshold is None:  # validation
-                precision, recall, thresholds = precision_recall_curve(y_true=true_labels, probas_pred=losses)
-                f1_scores = (2 * precision * recall / (precision + recall))
-                f1 = np.nanmax(f1_scores)
-                opt_threshold = thresholds[np.argmax(f1_scores)]
-            else:  # testing
-                y_pred = (losses > opt_threshold).astype(int)
-                f1 = f1_score(y_true=true_labels, y_pred=y_pred)
+                scores_l1.extend(score_l1)
+                scores_l1_top_k.extend(score_l1_top_k)
+                scores_l1_kld.extend(score_l1_kl)
+                scores_l1_kld_top_k.extend(score_l1_kl_top_k)
+                true_labels.extend(labels.numpy())
 
-            print(f'ROC-AUC on {type}: {roc_auc}')
-            print(f'MSE on {type}: {mse}')
-            print(f'F1-score on {type}: {f1}. Optimal threshold on {type}: {opt_threshold}')
-
-            metrics = {"roc-auc": roc_auc,
-                       "mse": mse,
-                       "f1-score": f1,
-                       "optimal mse threshold": opt_threshold}
+            metrics_l1 = calculate_metrics(np.array(scores_l1_kld), np.array(true_labels), 'l1')
+            metrics_l1_top_k = calculate_metrics(np.array(scores_l1_top_k), np.array(true_labels), 'l1_top_k')
+            metrics_l1_kld = calculate_metrics(np.array(scores_l1_kld), np.array(true_labels), 'l1_kld')
+            metrics_l1_kld_top_k = calculate_metrics(np.array(scores_l1_kld_top_k), np.array(true_labels),
+                                                     'l1_kld_top_k')
+            metrics = {**metrics_l1, **metrics_l1_top_k, **metrics_l1_kld, **metrics_l1_kld_top_k}
 
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
                     mlflow.log_metric(metric, value)
+
             return metrics
 
-    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR):
+    def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
+                                   is_remote=False):
         """
         Save random sample of original and reconstructed image
         :param inp_image: input original image
@@ -250,8 +278,13 @@ class VAE(nn.Module):
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
             ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
             ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            plt.savefig(f'{path}/epoch{epoch}_label{int(label)}.png')
+            path = f'{path}/epoch{epoch}_label{int(label)}.png'
+            plt.savefig(path)
             plt.close(fig)
+
+            if to_mlflow:
+                log_artifact(path, 'images', is_remote=is_remote)
+                os.remove(path)
 
     summary = BaselineAutoencoder.__dict__["summary"]
 
@@ -270,14 +303,17 @@ class VAE(nn.Module):
 
         # Format input batch
         inp = Variable(batch_data['image']).to(self.device)
+        mask = batch_data['mask'].to(self.device) if self.masked_loss_on_train else None
 
         # forward pass
         output, mu, logvar = self(inp)
-        loss = VAE.loss(output, inp, mu, logvar)
+        L1, KLD = VAE.loss_L1(output, inp, mu, logvar, mask=mask)
+        loss = L1 + 0.001 * KLD
 
         # backward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        return {'bce + kld': float(loss.data)}
+        return {'l1': float(L1.data),
+                'kld': float(KLD.data)}
