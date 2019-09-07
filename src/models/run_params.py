@@ -20,8 +20,9 @@ COMMON_PARAMS = {
         'hist_equalisation': False,
         'otsu_filter': False,
         'adaptive_hist_equilization': False,
+        'normalisation': (-1, 1),
     },
-    'random_seed': [424242, 42424242],
+    'random_seed': [42, 4242, 424242, 42424242],
 }
 
 MODEL_SPECIFIC_PARAMS = {
@@ -70,15 +71,15 @@ MODEL_SPECIFIC_PARAMS = {
     },
     'DCGAN': {
         'augmentation': DEFAULT_AUGMENTATION,
-        'batch_size': 64,
+        'batch_size': 80,
         'image_resolution': (512, 512),
         'num_epochs': 500,
-        'batch_normalisation': True,
+        'batch_normalisation': False,
         'spectral_normalisation': True,
         'soft_labels': True,
         'glr': 0.001,
-        'dlr': 0.0001,
-        'soft_delta': 0.1,
+        'dlr': 0.00001,
+        'soft_delta': 0.01,
         'z_dim': 2048,
         'checkpoint_frequency': 2000,
     },

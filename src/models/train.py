@@ -24,7 +24,7 @@ from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # set model type
-model_class = SAGAN
+model_class = DCGAN
 
 # set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -40,7 +40,7 @@ remote_run = query_yes_no('Is this run remote?', 'no')
 if log_to_mlflow:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(model_class.__name__ + 'New')
-    mlflow.start_run(run_id='553225ba44224347a60a34154e9f7ecf')
+    mlflow.start_run()
 
 # Ignoring numpy warnings
 np.seterr(divide='ignore', invalid='ignore')
@@ -70,7 +70,7 @@ for random_seed in run_params['random_seed']:
                                    Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                    Padding(max_shape=run_params['image_resolution']),
                                    # max_shape - max size of image after augmentation
-                                   MinMaxNormalization(),
+                                   MinMaxNormalization(*run_params['pipeline']['normalisation']),
                                    ToTensor()])
 
     # transformation for validation and test
@@ -82,7 +82,7 @@ for random_seed in run_params['random_seed']:
                                        Resize(run_params['image_resolution'], keep_aspect_ratio=True),
                                        Padding(max_shape=run_params['image_resolution']),
                                        # max_shape - max size of image after augmentation
-                                       MinMaxNormalization(),
+                                       MinMaxNormalization(*run_params['pipeline']['normalisation']),
                                        ToTensor()])
 
     # Dataset loaders
@@ -100,9 +100,11 @@ for random_seed in run_params['random_seed']:
                       patients=splitter.data_test.patient, transform=composed_transforms_val)
 
     train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
-                              worker_init_fn=loader_init_fn)
-    val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
-    test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers)
+                              worker_init_fn=loader_init_fn, drop_last=True)
+    val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
+                            drop_last=True)
+    test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
+                             drop_last=True)
 
     # Model initialization
     model = model_class(device=device, **run_params)
@@ -162,15 +164,21 @@ for random_seed in run_params['random_seed']:
             model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0),
                                              validation[index]['label'], epoch, to_mlflow=log_to_mlflow,
                                              is_remote=remote_run)
-        elif model_class in [DCGAN] and epoch % 4 == 0:
+        elif model_class in [DCGAN] and epoch % 3 == 0:
             # evaluate performance of generator
-            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run)
+            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run,
+                                      vmin=run_params['pipeline']['normalisation'][0],
+                                      vmax=run_params['pipeline']['normalisation'][1])
         elif model_class in [AlphaGan, SAGAN] and epoch % 2 == 0:
             # evaluate performance of generator
-            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run)
+            model.visualize_generator(epoch, to_mlflow=log_to_mlflow, is_remote=remote_run,
+                                      vmin=run_params['pipeline']['normalisation'][0],
+                                      vmax=run_params['pipeline']['normalisation'][1])
             # evaluate performance of encoder / generator
             model.forward_and_save_one_image(validation[index]['image'].unsqueeze(0), validation[index]['label'], epoch,
-                                             to_mlflow=log_to_mlflow, is_remote=remote_run)
+                                             to_mlflow=log_to_mlflow, is_remote=remote_run,
+                                             vmin=run_params['pipeline']['normalisation'][0],
+                                             vmax=run_params['pipeline']['normalisation'][1])
 
         # Checkpoints
         if 'checkpoint_frequency' in run_params and epoch % run_params['checkpoint_frequency'] == 0:

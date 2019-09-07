@@ -8,6 +8,7 @@ import torch.nn as nn
 import torchvision.utils as vutils
 from torch.distributions.uniform import Uniform
 from torch.nn import Parameter
+from torchgan.layers import MinibatchDiscrimination1d
 from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR
@@ -94,8 +95,8 @@ class Generator(nn.Module):
                  decoder_paddings: List[int] = (0, 1, 1, 1, 1, 1, 1, 1),
                  batch_normalisation=True,
                  spectral_normalisation=True,
-                 internal_activation=nn.ReLU,
-                 final_activation=nn.Sigmoid):
+                 internal_activation=nn.LeakyReLU,
+                 final_activation=nn.Tanh):
         super(Generator, self).__init__()
         self.hyper_parameters = locals()
         self.hyper_parameters.pop('self')
@@ -132,13 +133,13 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self,
                  encoder_in_chanels: List[int] = (1, 4, 8, 16, 32, 64, 128, 256),
-                 encoder_out_chanels: List[int] = (4, 8, 16, 32, 64, 128, 256, 1),
+                 encoder_out_chanels: List[int] = (4, 8, 16, 32, 64, 128, 256, 512),
                  encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4, 4, 4),
                  encoder_strides: List[int] = (2, 2, 2, 2, 2, 2, 2, 1),
                  encoder_paddings: List[int] = (1, 1, 1, 1, 1, 1, 1, 0),
                  batch_normalisation: bool = True,
                  spectral_normalisation=True,
-                 internal_activation=nn.ReLU,
+                 internal_activation=nn.LeakyReLU,
                  final_activation=nn.Sigmoid):
         super(Discriminator, self).__init__()
         self.hyper_parameters = locals()
@@ -159,15 +160,24 @@ class Discriminator(nn.Module):
 
             if batch_normalisation:
                 self.encoder_layers.append(nn.BatchNorm2d(encoder_out_chanels[i]))
-            if i < len(encoder_in_chanels) - 1:
-                self.encoder_layers.append(internal_activation())
-            else:
-                self.encoder_layers.append(final_activation())
+            # if i < len(encoder_in_chanels) - 1:
+            self.encoder_layers.append(internal_activation())
+            # else:
+            #     self.encoder_layers.append(final_activation())
 
         self.discriminator = nn.Sequential(*self.encoder_layers)
 
+        self.fc = nn.Linear(512 + 16, 1)
+        self.final_activation = final_activation()
+        self.minibatch_discrimination = MinibatchDiscrimination1d(in_features=512 * 4, out_features=16 * 4,
+                                                                  intermediate_features=128)
+
     def forward(self, x):
-        return self.discriminator(x)
+        x = self.discriminator(x)
+        x_flat = x.view(-1, 512 * 4)
+        x = self.minibatch_discrimination(x_flat).view(x.shape[0], -1)
+        x = self.fc(x)
+        return self.final_activation(x)
 
 
 class DCGAN(nn.Module):
@@ -237,11 +247,11 @@ class DCGAN(nn.Module):
         print('Generator:')
         model_summary, trainable_paramsG = summary(self.generator, input_size=(self.z_dim, 1, 1), device=self.device)
         print('Discriminator:')
-        model_summary, trainable_paramsD = summary(self.discriminator, input_size=(1, *image_resolution),
-                                                   device=self.device)
-        return trainable_paramsG + trainable_paramsD
+        # model_summary, trainable_paramsD = summary(self.discriminator, input_size=(16, *image_resolution),
+        #                                            device=self.device)
+        return trainable_paramsG  # + trainable_paramsD
 
-    def train_on_batch(self, batch_data, epoch, *args, **kwargs):
+    def train_on_batch(self, batch_data, epoch, num_epochs, *args, **kwargs):
         """
         Performs one step of gradient descent on batch_data
         :param batch_data: Data of batch
@@ -262,6 +272,8 @@ class DCGAN(nn.Module):
             label += self.real_labels_softener.sample((b_size,)).to(self.device)
 
         # Backward pass (1) Update discriminator network: maximize log(D(x)) + log(1 - D(G(z)))
+        # noise1 = torch.Tensor(real_inp.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
+        #         epoch + 1)).to(self.device)  # Noise for real images
         self.discriminator.zero_grad()
         output = self.discriminator(real_inp).view(-1)
         # Train with all-real batch
@@ -273,6 +285,9 @@ class DCGAN(nn.Module):
         label.fill_(self.fake_label)
         if self.soft_labels:
             label += self.fake_labels_softener.sample((b_size,)).to(self.device)
+
+        # noise2 = torch.Tensor(real_inp.size()).normal_(0, 0.01 * (epoch + 1 - num_epochs) / (
+        #         epoch + 1)).to(self.device)  # Noise for fake images
         output = self.discriminator(fake.detach()).view(-1)  # detached fake - not to backprop on generator
         loss_D_fake = self.inner_loss(output, label)
         # Calculate the gradients for this batch
@@ -298,7 +313,7 @@ class DCGAN(nn.Module):
         return {'generator loss': float(self.loss_G),
                 'discriminator loss': float(self.loss_D)}
 
-    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, *args, **kwargs):
+    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, vmin=-1, vmax=1, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         path = TMP_IMAGES_DIR
         # Evaluation mode
@@ -306,7 +321,7 @@ class DCGAN(nn.Module):
 
         with torch.no_grad():
             fake = self.generator(self.fixed_noise).detach().cpu()
-        img = vutils.make_grid(fake, padding=20, normalize=False)
+        img = vutils.make_grid(fake, padding=20, normalize=False, range=(vmin, vmax))
         path = f'{path}/epoch{epoch}.png'
         vutils.save_image(img, path)
 

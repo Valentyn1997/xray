@@ -481,14 +481,15 @@ class SAGAN(nn.Module):
         return {'generator-encoder loss': float(self.ge_loss),
                 'discriminator loss': float(self.d_loss)}
 
-    def visualize_generator(self, epoch, path=TMP_IMAGES_DIR, to_mlflow=False, is_remote=False, *args, **kwargs):
+    def visualize_generator(self, epoch, path=TMP_IMAGES_DIR, to_mlflow=False, is_remote=False, vmin=0, vmax=1, *args,
+                            **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         # Evaluation mode
         self.generator.eval()
 
         with torch.no_grad():
             fake = self.generator(self.fixed_noise)[0].detach().cpu()
-            img = vutils.make_grid(fake, padding=20, normalize=False)
+            img = vutils.make_grid(fake, padding=20, normalize=False, range=(vmin, vmax))
             img_path = f'{path}/epoch{epoch}.png'
             vutils.save_image(img, img_path)
 
@@ -497,7 +498,7 @@ class SAGAN(nn.Module):
                 os.remove(img_path)
 
     def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
-                                   is_remote=False):
+                                   is_remote=False, vmin=0, vmax=1):
         """
         Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
         :param is_remote:
@@ -521,8 +522,8 @@ class SAGAN(nn.Module):
             output_img = reconstructed_img.to('cpu')
 
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+            ax[1].imshow(output_img.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
             path = f'{path}/epoch{epoch}_label{int(label)}.png'
             plt.savefig(path)
             plt.close(fig)

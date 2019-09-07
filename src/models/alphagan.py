@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torchvision.utils as vutils
 from torch.autograd import Variable
+from torchgan.layers import MinibatchDiscrimination1d
 from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR, TOP_K
@@ -257,6 +258,7 @@ class Discriminator(nn.Module):
         self.l1 = nn.Sequential(*layer1)
         self.l2 = nn.Sequential(*layer2)
         self.l3 = nn.Sequential(*layer3)
+        self.minibatch_discrimination = MinibatchDiscrimination1d(in_features=curr_dim, out_features=curr_dim)
 
         last.append(SpectralNorm(nn.Conv2d(curr_dim, 1, 4)))
         last.append(nn.Sigmoid())
@@ -278,6 +280,8 @@ class Discriminator(nn.Module):
         x3, p1 = self.attn1(x)
         x = self.l5(x3)
         x4, p2 = self.attn2(x)
+        # batch_data = self.minibatch_discrimination(x4)
+        # x4 = torch.cat(x4, batch_data)
         x5 = self.last(x4)
 
         return x5.squeeze(), x4, x3, p1, p2
@@ -493,7 +497,7 @@ class AlphaGan(nn.Module):
                 'discriminator loss': float(self.d_loss),
                 'codiscriminator loss': float(self.c_loss)}
 
-    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, *args, **kwargs):
+    def visualize_generator(self, epoch, to_mlflow=False, is_remote=False, vmin=0, vmax=1, *args, **kwargs):
         # Check how the generator is doing by saving G's output on fixed_noise
         path = TMP_IMAGES_DIR
         # Evaluation mode
@@ -501,7 +505,7 @@ class AlphaGan(nn.Module):
 
         with torch.no_grad():
             fake = self.generator(self.fixed_noise)[0].detach().cpu()
-            img = vutils.make_grid(fake, padding=20, normalize=False)
+            img = vutils.make_grid(fake, padding=20, normalize=False, range=(vmin, vmax))
             path = f'{path}/epoch{epoch}.png'
             vutils.save_image(img, path)
 
@@ -584,7 +588,7 @@ class AlphaGan(nn.Module):
         save_model(self, log_to_mlflow=True, is_remote=is_remote)
 
     def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
-                                   is_remote=False):
+                                   is_remote=False, vmin=0, vmax=1):
         """
         Reconstructs one image and writes two images (original and reconstructed) in one figure to :param path.
         :param inp_image: Image for evaluation
@@ -609,8 +613,8 @@ class AlphaGan(nn.Module):
             inp_image = inp_image.to('cpu')
             x_rec = x_rec.to('cpu')
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
-            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
-            ax[1].imshow(x_rec.numpy()[0, 0, :, :], cmap='gray', vmin=0, vmax=1)
+            ax[0].imshow(inp_image.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+            ax[1].imshow(x_rec.numpy()[0, 0, :, :], cmap='gray', vmin=vmin, vmax=vmax)
             path = f'{path}/epoch{epoch}_label{int(label)}.png'
             plt.savefig(path)
             plt.close(fig)
