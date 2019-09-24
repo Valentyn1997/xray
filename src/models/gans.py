@@ -232,6 +232,10 @@ class DCGAN(nn.Module):
         self.discriminator.to(*args, **kwargs)
         return self
 
+    def parallelize(self):
+        self.generator = nn.DataParallel(self.generator)
+        self.discriminator = nn.DataParallel(self.discriminator)
+
     def forward(self, x, discriminator=True):
         if discriminator:
             return self.discriminator(x)

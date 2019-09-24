@@ -258,9 +258,12 @@ class Discriminator(nn.Module):
         self.l1 = nn.Sequential(*layer1)
         self.l2 = nn.Sequential(*layer2)
         self.l3 = nn.Sequential(*layer3)
-        self.minibatch_discrimination = MinibatchDiscrimination1d(in_features=curr_dim, out_features=curr_dim)
+        md_out_channels = 4
+        self.minibatch_discrimination = MinibatchDiscrimination1d(in_features=curr_dim * 4 * 4,
+                                                                  out_features=md_out_channels * 4 * 4,
+                                                                  intermediate_features=256)
 
-        last.append(SpectralNorm(nn.Conv2d(curr_dim, 1, 4)))
+        last.append(SpectralNorm(nn.Conv2d(curr_dim + md_out_channels, 1, 4)))
         last.append(nn.Sigmoid())
         self.last = nn.Sequential(*last)
 
@@ -282,8 +285,9 @@ class Discriminator(nn.Module):
         x4, p2 = self.attn2(x)
         # batch_data = self.minibatch_discrimination(x4)
         # x4 = torch.cat(x4, batch_data)
+        x_flat = x4.view(-1, 1024 * 4 * 4)
+        x4 = self.minibatch_discrimination(x_flat).view(x4.shape[0], -1, 4, 4)
         x5 = self.last(x4)
-
         return x5.squeeze(), x4, x3, p1, p2
 
 
@@ -366,7 +370,7 @@ class AlphaGan(nn.Module):
         self.d_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.discriminator.parameters()), dlr,
                                             betas=(0.5, 0.999))
         self.c_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.codescriminator.parameters()),
-                                            0.1 * dlr,
+                                            0.01 * dlr,
                                             betas=(0.5, 0.999))
 
         # Placeholders for losses of disriminator and generator

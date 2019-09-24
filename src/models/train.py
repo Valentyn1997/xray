@@ -24,10 +24,11 @@ from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # set model type
-model_class = DCGAN
+model_class = VAE
 
 # set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f'Device: {device}')
 torch.cuda.empty_cache()
 # torch.cuda.set_device(1)
 # device = 'cpu'
@@ -100,19 +101,14 @@ for random_seed in run_params['random_seed']:
                       patients=splitter.data_test.patient, transform=composed_transforms_val)
 
     train_loader = DataLoader(train, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
-                              worker_init_fn=loader_init_fn, drop_last=True)
+                              worker_init_fn=loader_init_fn, drop_last=model_class in [DCGAN])
     val_loader = DataLoader(validation, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
-                            drop_last=True)
+                            drop_last=model_class in [DCGAN])
     test_loader = DataLoader(test, batch_size=run_params['batch_size'], shuffle=True, num_workers=num_workers,
-                             drop_last=True)
+                             drop_last=model_class in [DCGAN])
 
     # Model initialization
     model = model_class(device=device, **run_params)
-
-    # Parallelism
-    if torch.cuda.device_count() > 1:
-        model.parallelize()
-
     model = model.to(device)
 
     # model = torch.load(f'{MODELS_DIR}/{model_class.__name__}.pth')
@@ -121,6 +117,10 @@ for random_seed in run_params['random_seed']:
     trainable_params = model.summary(image_resolution=run_params['image_resolution'])
     run_params['trainable_params'] = trainable_params
     run_params['other_hyperparams'] = model.hyper_parameters
+
+    # Parallelism
+    if torch.cuda.device_count() > 1:
+        model.parallelize()
 
     # -------------------------------- Logging ------------------------------------
     # Logging
