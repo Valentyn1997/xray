@@ -102,6 +102,10 @@ class BaselineAutoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
+    def parallelize(self):
+        self.encoder = nn.DataParallel(self.encoder)
+        self.decoder = nn.DataParallel(self.decoder)
+
     def forward_and_save_one_image(self, inp_image, label, epoch, path=TMP_IMAGES_DIR, to_mlflow=False,
                                    is_remote=False):
         """
@@ -226,7 +230,7 @@ class BottleneckAutoencoder(BaselineAutoencoder):
                  decoder_kernel_sizes: List[int] = (1, 4, 4, 4, 4, 3),
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
                  batch_normalisation: bool = True,
-                 internal_activation=nn.ReLU,
+                 internal_activation=nn.Tanh,
                  final_activation=nn.Sigmoid,
                  lr=0.001,
                  *args, **kwargs):
@@ -305,7 +309,7 @@ class SkipConnection(BottleneckAutoencoder):
                  skip_connection_decoder: List[bool] = (False, True, True, False, False, False),
                  lr=0.001,
                  internal_activation=nn.ReLU,
-                 final_activation=nn.Sigmoid,
+                 final_activation=nn.Tanh,
                  *args, **kwargs):
 
         super(SkipConnection, self).__init__(*args, **kwargs)
@@ -405,7 +409,7 @@ class Bottleneck(BaselineAutoencoder):
                  decoder_strides: List[int] = (1, 2, 2, 2, 2, 1),
                  batch_normalisation: bool = True,
                  internal_activation=nn.ReLU,
-                 final_activation=nn.Sigmoid,
+                 final_activation=nn.Tanh,
                  lr=0.001,
                  *args, **kwargs):
 

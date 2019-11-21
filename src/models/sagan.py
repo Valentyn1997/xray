@@ -319,7 +319,7 @@ class Discriminator(nn.Module):
 
 class SAGAN(nn.Module):
     def __init__(self, device, dlr=0.00005, gelr=0.001, z_dim=100,
-                 adv_loss='hinge', masked_loss_on_val=True, image_resolution=(512, 512), *args, **kwargs):
+                 adv_loss='hinge', masked_loss_on_val=True, image_resolution=(512, 512), lambda_gp=10, *args, **kwargs):
         super(SAGAN, self).__init__()
 
         self.hyper_parameters = locals()
@@ -327,6 +327,7 @@ class SAGAN(nn.Module):
         self.device = device
         self.d_z = z_dim
         self.adv_loss = adv_loss
+        self.lambda_gp = lambda_gp
 
         self.generator = Generator(image_size=image_resolution[0], z_dim=self.d_z)
         self.discriminator = Discriminator(image_size=image_resolution[0], z_dim=self.d_z)
@@ -451,8 +452,10 @@ class SAGAN(nn.Module):
         if self.adv_loss == 'wgan-gp':
             # Compute gradient penalty
             alpha = torch.rand(real_images.size(0), 1, 1, 1).cuda().expand_as(real_images)
+            alpha_z = alpha[:, :, 0, 0].expand_as(real_z)
             interpolated = Variable(alpha * real_images.data + (1 - alpha) * fake_images.data, requires_grad=True)
-            out, _, _ = self.discriminator(interpolated)
+            interpolated_z = Variable(alpha_z * real_z.data + (1 - alpha_z) * fake_z.data, requires_grad=True)
+            out, _, _, _, _, _, _ = self.discriminator(interpolated, interpolated_z)
 
             grad = torch.autograd.grad(outputs=out,
                                        inputs=interpolated,

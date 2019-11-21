@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from src import TMP_IMAGES_DIR, TOP_K
 from src.models.autoencoders import BaselineAutoencoder
+from src.models.autoencoders import MaskedMSELoss
 from src.models.outlier_scoring import TopK, Mean
 from src.utils import log_artifact, calculate_metrics
 
@@ -23,7 +24,7 @@ class Flatten(nn.Module):
 
 class UnFlatten(nn.Module):
     def forward(self, input, size=512):
-        return input.view(input.size(0), size, 6, 6)
+        return input.view(input.size(0), size, 2, 2)
 
 
 class MaskedL1Loss(nn.Module):
@@ -52,15 +53,15 @@ class MaskedL1Loss(nn.Module):
 class VAE(nn.Module):
     """ Variational Convolutional Autoencoder using torch library """
 
-    def __init__(self, device, h_dim=18432, z_dim=512,
-                 encoder_in_chanels: List[int] = (1, 16, 32, 64, 128, 256),
-                 encoder_out_chanels: List[int] = (16, 32, 64, 128, 256, 512),
-                 encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4),
-                 encoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
-                 decoder_in_chanels: List[int] = (512, 256, 128, 64, 32, 16),
-                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 1),
-                 decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 6),
-                 decoder_strides: List[int] = (2, 2, 2, 2, 2, 2),
+    def __init__(self, device, h_dim=512 * 4, z_dim=512,
+                 encoder_in_chanels: List[int] = (1, 8, 16, 32, 64, 128, 256),
+                 encoder_out_chanels: List[int] = (8, 16, 32, 64, 128, 256, 512),
+                 encoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 4),
+                 encoder_strides: List[int] = (2, 2, 2, 2, 2, 2, 2),
+                 decoder_in_chanels: List[int] = (512, 256, 128, 64, 32, 16, 8),
+                 decoder_out_chanels: List[int] = (256, 128, 64, 32, 16, 8, 1),
+                 decoder_kernel_sizes: List[int] = (4, 4, 4, 4, 4, 4, 6),
+                 decoder_strides: List[int] = (2, 2, 2, 2, 2, 2, 2),
                  internal_activation=nn.ReLU,
                  batch_normalisation=True,
                  final_activation=nn.Sigmoid,
@@ -108,35 +109,44 @@ class VAE(nn.Module):
         # Losses
         self.masked_loss_on_val = masked_loss_on_val
         self.masked_loss_on_train = masked_loss_on_train
+        self.outer_loss = MaskedMSELoss(reduction='none') if self.masked_loss_on_val else nn.MSELoss(reduction='none')
 
         # Optimizer
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
-    def reparameterize(self, mu, var):
-        """
-        Reparametrization of distribution parameters: mean and variance
-        :param mu: mean
-        :param var: variance
-        """
-        std = var.mul(0.5).exp_()
-        # return torch.normal(mu, std)
-        esp = torch.randn(*mu.size()).to(self.device)
-        z = mu + std * esp
-        return z
-
-    def bottleneck(self, h):
-        mu, var = self.fc1(h), self.fc2(h)
-        z = self.reparameterize(mu, var)
-        return z, mu, var
-
-    def representation(self, x):
-        return self.bottleneck(self.encoder(x))[0]
+    # def reparameterize(self, mu, var):
+    #     """
+    #     Reparametrization of distribution parameters: mean and variance
+    #     :param mu: mean
+    #     :param var: variance
+    #     """
+    #     std = var.mul(0.5).exp_()
+    #     # return torch.normal(mu, std)
+    #     esp = torch.randn(*mu.size()).to(self.device)
+    #     z = mu + std * esp
+    #     return z
+    #
+    # def bottleneck(self, h):
+    #     mu, var =
+    #
+    #     return z, mu, var
 
     def forward(self, x):
         h = self.encoder(x)
-        z, mu, var = self.bottleneck(h)
+        mu, var = self.fc1(h), self.fc2(h)
+        std = var.mul(0.5).exp_()
+        esp = torch.randn(*mu.size()).to(self.device)
+        z = mu + std * esp
         z = self.fc3(z)
         return self.decoder(z), mu, var
+
+    def parallelize(self):
+        # self.encoder = nn.DataParallel(self.encoder)
+        # self.fc1 = nn.DataParallel(self.fc1)
+        # self.fc2 = nn.DataParallel(self.fc1)
+        # self.fc3 = nn.DataParallel(self.fc1)
+        # self.decoder = nn.DataParallel(self.decoder)
+        pass
 
     @staticmethod
     def loss(recon_x, x, mu, var, reduction='mean', mask=None):
@@ -150,15 +160,15 @@ class VAE(nn.Module):
         :return: loss
         """
         KLD = 0
-        BCE = F.binary_cross_entropy(recon_x, x, size_average=False, reduction=reduction)
+        BCE = F.binary_cross_entropy(recon_x, x, reduction=reduction)
         if reduction == 'mean':
             KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
         elif reduction == 'none':
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
-        return BCE + KLD
+        return BCE, KLD
 
     @staticmethod
-    def lossMSE(recon_x, x, mu, var, reduction='mean'):
+    def lossMSE(recon_x, x, mu, var, reduction='mean', mask=None):
         """
         Kullback Leibler divergence + MSE combined loss
         :param recon_x: reconstructed image
@@ -169,12 +179,15 @@ class VAE(nn.Module):
         :return: loss
         """
         KLD = 0
-        MSE = F.mse_loss(recon_x, x, size_average=False, reduction=reduction)
+        if mask is not None:
+            MSE = MaskedMSELoss(reduction=reduction)(recon_x, x, mask)
+        else:
+            MSE = F.mse_loss(recon_x, x, reduction=reduction)
         if reduction == 'mean':
             KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
         elif reduction == 'none':
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
-        return MSE + KLD
+        return MSE, KLD
 
     @staticmethod
     def loss_L1(recon_x, x, mu, var, reduction='mean', mask=None):
@@ -196,7 +209,6 @@ class VAE(nn.Module):
             KLD = -0.5 * torch.sum(1 + var - mu ** 2 - var.exp())
         elif reduction == 'none':
             KLD = -0.5 * (1 + var - mu ** 2 - var.exp())
-        # print(L1.shape, KLD.shape)
         return L1, KLD
 
     @staticmethod
@@ -218,10 +230,13 @@ class VAE(nn.Module):
         """
 
         self.eval()
-        scores_l1 = []
-        scores_l1_top_k = []
-        scores_l1_kld = []
-        scores_l1_kld_top_k = []
+        scores_L1 = []
+        scores_L2 = []
+        scores_L1_top_k = []
+        scores_L2_top_k = []
+        scores_kld = []
+        scores_L1_kld = []
+        scores_L2_kld = []
         true_labels = []
 
         with torch.no_grad():
@@ -234,24 +249,35 @@ class VAE(nn.Module):
                 # forward pass
                 output, mu, var = self(inp)
                 L1, KLD = self.loss_L1(output, inp, mu, var, reduction='none', mask=mask)
+                L2 = self.outer_loss(output, inp, mask) if self.masked_loss_on_val \
+                    else self.outer_loss(output, inp)
 
-                score_l1 = Mean.calculate(L1, masked_loss=self.masked_loss_on_val, mask=mask)
-                score_l1_top_k = TopK.calculate(L1, TOP_K, reduce_to_mean=True)
-                score_l1_kl = score_l1 + KLD.to('cpu').numpy().sum(axis=1)
-                score_l1_kl_top_k = score_l1_top_k + KLD.to('cpu').numpy().sum(axis=1)
+                score_L1 = Mean.calculate(L1, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_L2 = Mean.calculate(L2, masked_loss=self.masked_loss_on_val, mask=mask)
+                score_L1_top_k = TopK.calculate(L1, TOP_K, reduce_to_mean=True)
+                score_L2_top_k = TopK.calculate(L2, TOP_K, reduce_to_mean=True)
+                score_kld = KLD.to('cpu').numpy().sum(axis=1)
+                score_L1_kld = score_L1 + score_kld
+                score_L2_kld = score_L2 + score_kld
 
-                scores_l1.extend(score_l1)
-                scores_l1_top_k.extend(score_l1_top_k)
-                scores_l1_kld.extend(score_l1_kl)
-                scores_l1_kld_top_k.extend(score_l1_kl_top_k)
+                scores_L1.extend(score_L1)
+                scores_L2.extend(score_L2)
+                scores_L1_top_k.extend(score_L1_top_k)
+                scores_L2_top_k.extend(score_L2_top_k)
+                scores_kld.extend(score_kld)
+                scores_L1_kld.extend(score_L1_kld)
+                scores_L2_kld.extend(score_L2_kld)
                 true_labels.extend(labels.numpy())
 
-            metrics_l1 = calculate_metrics(np.array(scores_l1_kld), np.array(true_labels), 'l1')
-            metrics_l1_top_k = calculate_metrics(np.array(scores_l1_top_k), np.array(true_labels), 'l1_top_k')
-            metrics_l1_kld = calculate_metrics(np.array(scores_l1_kld), np.array(true_labels), 'l1_kld')
-            metrics_l1_kld_top_k = calculate_metrics(np.array(scores_l1_kld_top_k), np.array(true_labels),
-                                                     'l1_kld_top_k')
-            metrics = {**metrics_l1, **metrics_l1_top_k, **metrics_l1_kld, **metrics_l1_kld_top_k}
+            metrics_L1 = calculate_metrics(np.array(scores_L1), np.array(true_labels), 'l1')
+            metrics_L2 = calculate_metrics(np.array(scores_L2), np.array(true_labels), 'mse')
+            metrics_L1_top_k = calculate_metrics(np.array(scores_L1_top_k), np.array(true_labels), 'l1_top_k')
+            metrics_L2_top_k = calculate_metrics(np.array(scores_L2_top_k), np.array(true_labels), 'mse_top_k')
+            metrics_kld = calculate_metrics(np.array(scores_kld), np.array(true_labels), 'kld')
+            metrics_l1_kld = calculate_metrics(np.array(scores_L1_kld), np.array(true_labels), 'l1_kld')
+            metrics_l2_kld = calculate_metrics(np.array(scores_L2_kld), np.array(true_labels), 'mse_kld')
+            metrics = {**metrics_L1, **metrics_L2, **metrics_L1_top_k, **metrics_L2_top_k, **metrics_kld,
+                       **metrics_l1_kld, **metrics_l2_kld}
 
             if log_to_mlflow:
                 for (metric, value) in metrics.items():
@@ -307,13 +333,13 @@ class VAE(nn.Module):
 
         # forward pass
         output, mu, logvar = self(inp)
-        L1, KLD = VAE.loss_L1(output, inp, mu, logvar, mask=mask)
-        loss = L1 + 0.001 * KLD
+        BCE, KLD = VAE.loss(output, inp, mu, logvar, mask=mask)
+        loss = BCE + KLD
 
         # backward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        return {'l1': float(L1.data),
+        return {'bce': float(BCE.data),
                 'kld': float(KLD.data)}
