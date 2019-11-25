@@ -7,8 +7,6 @@ tqdm
 matplotlib
 scikit-learn
 pandas
-opencv-python
-numpy
 torch
 scipy
 # local package

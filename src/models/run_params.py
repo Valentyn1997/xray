@@ -18,7 +18,7 @@ ADVANCED_AUGMENTATION = iaa.Sequential([iaa.Fliplr(0.5),  # horizontally flip 50
 
 
 COMMON_PARAMS = {
-    'data_source': 'XR_HAND',
+    'data_source': 'XR_HAND_PHOTOSHOP',
     'pipeline': {
         'hist_equalisation': True,
         'otsu_filter': False,

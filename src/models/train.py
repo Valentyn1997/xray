@@ -24,13 +24,12 @@ from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # set model type
-model_class = VAE
+model_class = AlphaGan
 
 # set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f'Device: {device}')
 torch.cuda.empty_cache()
-# torch.cuda.set_device(1)
 # device = 'cpu'
 # set number of cpu kernels for data processing
 num_workers = 12
