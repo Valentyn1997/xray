@@ -3,17 +3,27 @@ xray
 
 The aim of this project is to classify x-ray images of hands into normal or not normal hands. Because of the high cost of labelling the data the task should be done in an unsupervised way. That means that the labels should not be included while training. 
 
-The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/competitions/mura) ([paper](https://arxiv.org/pdf/1712.06957.pdf)) and includes x-ray images of hands. The data seems not to be very clean (see [First look at dataset](https://gitlab.lrz.de/random_state42/xray/wikis/First-look-at-dataset)). To handle this problem a data cleaning pipeline was implemented (see [Data cleaning & preprocessing](https://gitlab.lrz.de/random_state42/xray/wikis/Data-cleaning-&-preprocessing) and [Results of hand center localisation](https://gitlab.lrz.de/random_state42/xray/wikis/Result-of-Hand-Center-Localisation)).
+The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/competitions/mura) ([paper](https://arxiv.org/pdf/1712.06957.pdf)) and includes x-ray images of hands. The data seems not to be very clean (see [First look at dataset](https://github.com/Valentyn1997/xray/wiki/First-look-at-dataset)). To handle this problem a data cleaning pipeline was implemented (see [Data cleaning & preprocessing](https://github.com/Valentyn1997/xray/wiki/Data-cleaning-&-preprocessing) and [Results of hand center localisation](https://github.com/Valentyn1997/xray/wiki/Result-of-Hand-Center-Localisation)).
 
-The summary of the research about different unsupervised methods to find anomalies can be found [here](https://gitlab.lrz.de/random_state42/xray/wikis/Unsupervised-Deep-Learning-for-Medical-Image-Analysis). [Different metrics](https://gitlab.lrz.de/random_state42/xray/wikis/Evaluation-strategy-&-metrics) are presented to evaluate different models.
+The summary of the research about different unsupervised methods to find anomalies can be found [here](https://github.com/Valentyn1997/xray/wiki/Unsupervised-Deep-Learning-for-Medical-Image-Analysis). [Different metrics](https://github.com/Valentyn1997/xray/wiki/Evaluation-strategy-&-performance-metrics) are presented to evaluate different models.
 
 ### General
+- see [Evaluation strategy and performance metrics](https://github.com/Valentyn1997/xray/wiki/Evaluation-strategy-&-performance-metrics)
+- see [How to ...](https://github.com/Valentyn1997/xray/wiki/How-to-...)
 
 ### Data Cleaning
+- see [Data cleaning & preprocessing](https://github.com/Valentyn1997/xray/wiki/Data-cleaning-&-preprocessing)
+- Hand detection
+  - for how to train a hand detection model see [How to train an object detection model](https://github.com/Valentyn1997/xray/wiki/How-to-train-an-object-detection-model)
+  -  results: [Results of hand center localisation](https://github.com/Valentyn1997/xray/wiki/Result-of-Hand-Center-Localisation)
 
 ### Research Of Different Methods
+- see [Unsupervised Deep Learning for Medical Image Analysis](https://github.com/Valentyn1997/xray/wiki/Unsupervised-Deep-Learning-for-Medical-Image-Analysis)
+- DBScan see [Anomaly Detection Study](https://github.com/Valentyn1997/xray/wiki/Anomaly-Detection-Study)
 
 ### Evaluation of Models
+- see [Failure Cases](https://github.com/Valentyn1997/xray/wiki/Failure-Cases)
+- see [Augmentation Effect](https://github.com/Valentyn1997/xray/wiki/Augmentation-effect)
 
 Installation
 ==============================
