@@ -7,6 +7,19 @@ The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/comp
 
 The summary of the research about different unsupervised methods to find anomalies can be found [here](https://gitlab.lrz.de/random_state42/xray/wikis/Unsupervised-Deep-Learning-for-Medical-Image-Analysis). [Different metrics](https://gitlab.lrz.de/random_state42/xray/wikis/Evaluation-strategy-&-metrics) are presented to evaluate different models.
 
+### General
+
+### Data Cleaning
+
+### Research Of Different Methods
+
+### Evaluation of Models
+
+Installation
+==============================
+`git clone https://github.com/Valentyn1997/xray.git`
+`pip3 install -r requirements.txt`
+
 
 Project Organization
 ------------
