@@ -1,6 +1,8 @@
 xray
 ==============================
 
+![Anomalies examples](https://github.com/Valentyn1997/xray/wiki/uploads/anomalies.png)
+
 The aim of this project is to classify x-ray images of hands into normal or not normal hands. Because of the high cost of labelling the data the task should be done in an unsupervised way. That means that the labels should not be included while training. 
 
 The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/competitions/mura) ([paper](https://arxiv.org/pdf/1712.06957.pdf)) and includes x-ray images of hands. The data seems not to be very clean (see [First look at dataset](https://github.com/Valentyn1997/xray/wiki/First-look-at-dataset)). To handle this problem a data cleaning pipeline was implemented (see [Data cleaning & preprocessing](https://github.com/Valentyn1997/xray/wiki/Data-cleaning-&-preprocessing) and [Results of hand center localisation](https://github.com/Valentyn1997/xray/wiki/Result-of-Hand-Center-Localisation)).
@@ -9,6 +11,8 @@ The summary of the research about different unsupervised methods to find anomali
 
 Google slides presentation: https://docs.google.com/presentation/d/1pXkECiz_-7tphmOvIIWny4fB4Hba_LS4O6GhLeDwkIo/edit?usp=sharing. 
 Link to arxiv: TODO.
+
+![Anomalies gif](https://github.com/Valentyn1997/xray/wiki/uploads/image1.gif)
 
 ### General
 - see [Evaluation strategy and performance metrics](https://github.com/Valentyn1997/xray/wiki/Evaluation-strategy-&-performance-metrics)
