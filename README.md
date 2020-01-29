@@ -1,10 +1,12 @@
 xray
 ==============================
 
-[![pipeline status](https://gitlab.lrz.de/random_state42/xray/badges/master/pipeline.svg)](https://gitlab.lrz.de/random_state42/xray/commits/master)
-[![coverage report](https://gitlab.lrz.de/random_state42/xray/badges/master/coverage.svg)](https://gitlab.lrz.de/random_state42/xray/commits/master)
+The aim of this project is to classify x-ray images of hands into normal or not normal hands. Because of the high cost of labelling the data the task should be done in an unsupervised way. That means that the labels should not be included while training. 
 
-Anomaly Detection in X-Ray Images as an Unsupervised learning task
+The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/competitions/mura) ([paper](https://arxiv.org/pdf/1712.06957.pdf)) and includes x-ray images of hands. The data seems not to be very clean (see [First look at dataset](https://gitlab.lrz.de/random_state42/xray/wikis/First-look-at-dataset)). To handle this problem a data cleaning pipeline was implemented (see [Data cleaning & preprocessing](https://gitlab.lrz.de/random_state42/xray/wikis/Data-cleaning-&-preprocessing) and [Results of hand center localisation](https://gitlab.lrz.de/random_state42/xray/wikis/Result-of-Hand-Center-Localisation)).
+
+The summary of the research about different unsupervised methods to find anomalies can be found [here](https://gitlab.lrz.de/random_state42/xray/wikis/Unsupervised-Deep-Learning-for-Medical-Image-Analysis). [Different metrics](https://gitlab.lrz.de/random_state42/xray/wikis/Evaluation-strategy-&-metrics) are presented to evaluate different models.
+
 
 Project Organization
 ------------
