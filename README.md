@@ -7,6 +7,9 @@ The data is a subset of the [MURA dataset](http://stanfordmlgroup.github.io/comp
 
 The summary of the research about different unsupervised methods to find anomalies can be found [here](https://github.com/Valentyn1997/xray/wiki/Unsupervised-Deep-Learning-for-Medical-Image-Analysis). [Different metrics](https://github.com/Valentyn1997/xray/wiki/Evaluation-strategy-&-performance-metrics) are presented to evaluate different models.
 
+Google slides presentation: https://docs.google.com/presentation/d/1pXkECiz_-7tphmOvIIWny4fB4Hba_LS4O6GhLeDwkIo/edit?usp=sharing. 
+Link to arxiv: TODO.
+
 ### General
 - see [Evaluation strategy and performance metrics](https://github.com/Valentyn1997/xray/wiki/Evaluation-strategy-&-performance-metrics)
 - see [How to ...](https://github.com/Valentyn1997/xray/wiki/How-to-...)
