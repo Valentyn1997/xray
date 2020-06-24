@@ -1,6 +1,9 @@
 xray
 ==============================
 
+[![arXiv](https://img.shields.io/badge/arXiv-2001.10883-b31b1b.svg)](https://arxiv.org/abs/2001.10883)
+[![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
+
 ![Anomalies examples](https://github.com/Valentyn1997/xray/wiki/uploads/anomalies.png)
 
 The aim of this project is to classify x-ray images of hands into normal or not normal hands. Because of the high cost of labelling the data the task should be done in an unsupervised way. That means that the labels should not be included while training. 
