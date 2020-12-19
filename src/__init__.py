@@ -15,8 +15,8 @@ MLFLOW_TRACKING_URI = 'http://localhost:5001'
 
 TOP_K = 200
 
-SSH = paramiko.SSHClient()
-SSH.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
-SSH.connect('10.195.1.221', username='ubuntu', )
-
-SFTP = SSH.open_sftp()
+# SSH = paramiko.SSHClient()
+# SSH.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
+# SSH.connect('10.195.1.221', username='ubuntu', )
+#
+# SFTP = SSH.open_sftp()

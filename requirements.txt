@@ -1,13 +1,13 @@
 torchgan
 paramiko
 scikit-image
-torchvision
+torchvision==0.5.0
 mlflow
 tqdm
 matplotlib
 scikit-learn
 pandas
-torch
+torch==1.4.0
 scipy
 # local package
 # -e .

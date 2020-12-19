@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-from src import MODELS_DIR, SFTP
+from src import MODELS_DIR#, SFTP
 
 
 def query_yes_no(question, default="yes"):

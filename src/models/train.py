@@ -24,7 +24,7 @@ from src.utils import query_yes_no, save_model
 
 # ---------------------------------------  Parameters setups ---------------------------------------
 # set model type
-model_class = AlphaGan
+model_class = SAGAN
 
 # set device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,7 +32,7 @@ print(f'Device: {device}')
 torch.cuda.empty_cache()
 # device = 'cpu'
 # set number of cpu kernels for data processing
-num_workers = 12
+num_workers = 0
 log_to_mlflow = query_yes_no('Log this run to mlflow?', 'no')
 remote_run = query_yes_no('Is this run remote?', 'no')
 
@@ -47,6 +47,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 run_params = {**COMMON_PARAMS, **MODEL_SPECIFIC_PARAMS[model_class.__name__]}
 test_metrics = []
+torch.autograd.set_detect_anomaly(True)
 
 for random_seed in run_params['random_seed']:
 

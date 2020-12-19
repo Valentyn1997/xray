@@ -211,7 +211,7 @@ class Encoder(nn.Module):
         mean = self.mean(out)
         log_var = self.log_var(out)
 
-        return mean.squeeze(), log_var.squeeze(), p1, p2
+        return mean.squeeze(-1).squeeze(-1), log_var.squeeze(-1).squeeze(-1), p1, p2
 
 
 class Discriminator(nn.Module):
