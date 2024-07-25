@@ -7,7 +7,7 @@ tqdm
 matplotlib
 scikit-learn
 pandas
-torch==1.4.0
+torch==2.2.0
 scipy
 # local package
 # -e .
